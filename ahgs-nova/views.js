@@ -841,27 +841,47 @@ async function viewMine(view, params) {
             byProblem.get(s.problem_key).push(s);
         }
         const keys = [...new Set([...rankMap.keys(), ...byProblem.keys()])];
-        const trackCards = state.problems.map(p => {
+        const TIERS = [
+            { key: "1", label: "第 1 名", test: r => r === 1 },
+            { key: "2", label: "第 2 名", test: r => r === 2 },
+            { key: "3", label: "第 3 名", test: r => r === 3 },
+            { key: "46", label: "第 4~6 名", test: r => r >= 4 && r <= 6 },
+            { key: "710", label: "第 7~10 名", test: r => r >= 7 && r <= 10 },
+            { key: "1120", label: "第 11~20 名", test: r => r >= 11 && r <= 20 },
+            { key: "2150", label: "第 21~50 名", test: r => r >= 21 && r <= 50 },
+            { key: "50p", label: "50 名开外 / 未上榜", test: r => r == null || r > 50 },
+            { key: "none", label: "未参加", test: r => r === "none" },
+        ];
+        const allTracks = state.problems.map(p => {
             const rank = rankMap.get(p.key);
             const subs = (byProblem.get(p.key) ?? []).slice().sort((a, b) => (parseServerTime(a.created_at)?.getTime() ?? 0) - (parseServerTime(b.created_at)?.getTime() ?? 0));
             const objs = subs.map(x => Number(x.objective)).filter(isFinite);
             const asc = p.ascend !== false;
             const best = objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;
             const part = subs.length > 0 || !!rank;
-            return `<div class="stat track-card ${part ? "" : "dim"}" title="${esc(p.name)}" onclick="document.getElementById('sec-${esc(p.key)}')?.scrollIntoView({ behavior: 'smooth' })">
-          <div class="k">${esc(p.name.split(" ")[0])} <span class="hint" style="font-size:10.5px">${asc ? "越小越好" : "越大越好"}</span></div>
-          <div class="v mono">${fmtObj(best)}</div>
-          <div class="s">${rank ? `第 ${rank.rank} 名${rank.rank <= 3 ? " " + ["🥇", "🥈", "🥉"][rank.rank - 1] : ""}` : (part ? "未上榜" : "未参加")}</div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:6px">
-            <span class="hint" style="font-size:11.5px">${subs.length} 次${subs.length ? " · " + fmtTime(subs[subs.length - 1].created_at) : ""}</span>
-            ${objs.length > 1 ? sparklineSVG(objs) : ""}
-          </div>
-        </div>`;
-        }).join("");
-        const participated = state.problems.filter(p => rankMap.get(p.key) || (byProblem.get(p.key) ?? []).length).length;
+            return {
+                key: p.key, name: p.name.split(" ")[0], fullName: p.name, asc,
+                rank: rank ? rank.rank : null, best,
+                count: subs.length, lastAt: subs.length ? subs[subs.length - 1].created_at : null,
+                spark: objs, participated: part,
+            };
+        });
+        const tierGroups = TIERS.map(t => ({
+            key: t.key, label: t.label,
+            items: allTracks.filter(c => t.test(c.participated ? (c.rank ?? null) : "none")),
+        })).filter(g => g.items.length);
+        const tierHtml = tierGroups.map(g => `<details class="tier${g.key === "none" ? " tier-dim" : ""}">
+          <summary><span class="tier-name">${esc(g.label)}</span><span class="tier-count">${g.items.length} 个赛道</span><span class="tier-preview">${esc(g.items.map(i => i.name).join("、"))}</span></summary>
+          <div class="tier-body">${g.items.map(c => `<div class="tier-row" title="${esc(c.fullName)}" onclick="document.getElementById('sec-${esc(c.key)}')?.scrollIntoView({ behavior: 'smooth' })">
+            <span class="tier-track">${esc(c.name)}</span>
+            <span class="tier-best mono">${fmtObj(c.best)}</span>
+            <span class="tier-dir">${c.asc ? "越小越好" : "越大越好"}</span>
+            <span class="tier-meta">${c.count} 次${c.lastAt ? " · " + fmtTime(c.lastAt) : ""}</span>
+            ${c.spark.length > 1 ? sparklineSVG(c.spark) : ""}
+          </div>`).join("")}</div>
+        </details>`).join("");
         $("mn-body").innerHTML = (keys.length ? `<div class="mine-head"><span class="mine-title">各赛道速览</span>
-      <span class="hint">共 ${state.problems.length} 个赛道 · ${participated} 个已参与 · 点卡片跳到明细</span></div>
-      <div class="grid cols-4" style="margin-bottom:16px">${trackCards}</div>` : "") + (keys.length ? keys.map(key => {
+      <span class="hint">共 ${state.problems.length} 个赛道 · ${state.problems.filter(p => rankMap.get(p.key) || (byProblem.get(p.key) ?? []).length).length} 个已参与 · 按名次分组，点开查看</span></div>` + tierHtml : "") + (keys.length ? keys.map(key => {
             const p = state.problemMap.get(key);
             const rank = rankMap.get(key);
             const list = (byProblem.get(key) ?? []).slice().sort((a, b) => (parseServerTime(a.created_at)?.getTime() ?? 0) - (parseServerTime(b.created_at)?.getTime() ?? 0));

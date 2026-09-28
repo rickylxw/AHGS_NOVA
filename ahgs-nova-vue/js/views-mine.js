@@ -27,23 +27,24 @@ const MineView = {
       <div v-if="recordsLoading" class="loading-row"><span class="spinner"></span>加载中…</div>
       <template v-else>
         <div class="mine-head"><span class="mine-title">各赛道速览</span>
-          <span class="hint">共 {{ trackCards.length }} 个赛道 · {{ participatedCount }} 个已参与 · 点卡片跳到明细</span></div>
-        <div class="grid cols-4" style="margin-bottom:16px">
-          <div v-for="c in trackCards" :key="c.key" class="stat track-card" :class="{ dim: !c.participated }" @click="jumpTo(c.key)" :title="c.fullName">
-            <div class="k">{{ c.name }} <span class="hint" style="font-size:10.5px">{{ c.asc ? "越小越好" : "越大越好" }}</span></div>
-            <div class="v mono">{{ c.best != null ? fmtObj(c.best) : "—" }}</div>
-            <div class="s">
-              <template v-if="c.rank">第 {{ c.rank }} 名<template v-if="c.rank <= 3"> {{ ["🥇","🥈","🥉"][c.rank - 1] }}</template></template>
-              <template v-else-if="c.participated">未上榜</template>
-              <template v-else>未参加</template>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:6px">
-              <span class="hint" style="font-size:11.5px">{{ c.count }} 次<template v-if="c.lastAt"> · {{ fmtTime(c.lastAt) }}</template></span>
-              <span v-if="c.spark.length > 1" v-html="sparkSVG(c.spark)"></span>
+          <span class="hint">共 {{ trackCards.length }} 个赛道 · {{ participatedCount }} 个已参与 · 按名次分组，点开查看</span></div>
+        <details v-for="g in tierGroups" :key="g.key" class="tier" :class="{ 'tier-dim': g.key === 'none' }">
+          <summary>
+            <span class="tier-name">{{ g.label }}</span>
+            <span class="tier-count">{{ g.items.length }} 个赛道</span>
+            <span class="tier-preview">{{ g.items.map(i => i.name).join("、") }}</span>
+          </summary>
+          <div class="tier-body">
+            <div v-for="c in g.items" :key="c.key" class="tier-row" :title="c.fullName" @click="jumpTo(c.key)">
+              <span class="tier-track">{{ c.name }}</span>
+              <span class="tier-best mono">{{ c.best != null ? fmtObj(c.best) : "—" }}</span>
+              <span class="tier-dir">{{ c.asc ? "越小越好" : "越大越好" }}</span>
+              <span class="tier-meta">{{ c.count }} 次<template v-if="c.lastAt"> · {{ fmtTime(c.lastAt) }}</template></span>
+              <span v-if="c.spark.length > 1" class="tier-spark" v-html="sparkSVG(c.spark)"></span>
             </div>
           </div>
-        </div>
-        <div v-for="key in problemKeys" :key="key" :id="'sec-' + key">
+        </details>
+        <div v-for="key in problemKeys" :key="key" :id="'sec-' + key">        <div v-for="key in problemKeys" :key="key" :id="'sec-' + key">
           <div class="mine-head">
             <span class="mine-title">{{ rankMap[key]?.problem_name || probName(key) }}</span>
             <span v-if="rankMap[key]" class="mine-rank">
@@ -200,6 +201,22 @@ const MineView = {
           };
         }));
         const participatedCount = computed(() => trackCards.value.filter(c => c.participated).length);
+        const TIERS = [
+            { key: "1", label: "第 1 名", test: r => r === 1 },
+            { key: "2", label: "第 2 名", test: r => r === 2 },
+            { key: "3", label: "第 3 名", test: r => r === 3 },
+            { key: "46", label: "第 4~6 名", test: r => r >= 4 && r <= 6 },
+            { key: "710", label: "第 7~10 名", test: r => r >= 7 && r <= 10 },
+            { key: "1120", label: "第 11~20 名", test: r => r >= 11 && r <= 20 },
+            { key: "2150", label: "第 21~50 名", test: r => r >= 21 && r <= 50 },
+            { key: "50p", label: "50 名开外 / 未上榜", test: r => r == null || r > 50 },
+            { key: "none", label: "未参加", test: r => r === "none" },
+        ];
+        const tierGroups = computed(() => TIERS.map(t => ({
+            key: t.key,
+            label: t.label,
+            items: trackCards.value.filter(c => t.test(c.participated ? (c.rank ?? null) : "none")),
+        })).filter(g => g.items.length));
         function jumpTo(key) {
           document.getElementById("sec-" + key)?.scrollIntoView({ behavior: "smooth", block: "start" });
         }
@@ -345,7 +362,7 @@ const MineView = {
                 pwBusy.value = false;
             }
         }
-        return { store, getToken, tab, recordsLoading, instLoading, profileLoading, rankMap, subsByProblem, problemKeys, trackCards, participatedCount, jumpTo, meta, sortedSubs, probName, spark, instances, runs, me, pf, pfMsg, pfOk, pfBusy, pw, pwMsg, pwOk, pwBusy, saveProfile, savePassword, uploadAvatar, openSubmissionDrawer, navHash, statusName: s => STATUS_LABEL[s] ?? s ?? "—", fmtObj, fmtTokens, fmtTime, fullName, sparkSVG: sparklineSVG };
+        return { store, getToken, tab, recordsLoading, instLoading, profileLoading, rankMap, subsByProblem, problemKeys, trackCards, tierGroups, participatedCount, jumpTo, meta, sortedSubs, probName, spark, instances, runs, me, pf, pfMsg, pfOk, pfBusy, pw, pwMsg, pwOk, pwBusy, saveProfile, savePassword, uploadAvatar, openSubmissionDrawer, navHash, statusName: s => STATUS_LABEL[s] ?? s ?? "—", fmtObj, fmtTokens, fmtTime, fullName, sparkSVG: sparklineSVG };
     },
 };
 ROUTE_COMPS.mine = MineView;
