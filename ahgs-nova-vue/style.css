@@ -1361,3 +1361,15 @@ th.num {
 ::-webkit-scrollbar-corner {
     background: transparent;
 }
+
+/* 小胶囊按钮改用单色主题色，避免渐变在圆角两端发灰 */
+:root, [data-theme="dark"] { --on-accent: #06121c; }
+[data-theme="light"] { --on-accent: #ffffff; }
+.chip.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.btn.primary, .btn-login {
+  background: var(--accent);
+  color: var(--on-accent);
+}
