@@ -1,48 +1,147 @@
-/* ============ Vue 版视图：曲线分析 / 对比 ============ */
+/* ============ Vue 版视图：进化分析（实时监控 + 曲线分析 合并） ============ */
 "use strict";
 
-/* ==================== 曲线分析 ==================== */
-const CurveView = {
-    components: {
-        EmptyState,
-        FwBadge,
-        SrcBadge
-    },
-    props: ["params"],
-    template: `
+/* 数据来源两种：
+   - run:  /api/evolution/{id}/status + /results + /population（实时、可控、自动刷新）
+   - submission: /api/submissions/{id} + /record（静态、含每代个体明细）
+   图表与明细两种来源共用。路由名保持 curve，兼容旧链接 #/curve?id=xx */
+const AnalysisView = {
+  components: { EmptyState, FwBadge, SrcBadge, Avatar },
+  props: ["params"],
+  template: `
   <div>
     <div class="card">
-      <h2>进化曲线分析 <span class="tail">输入提交 ID，或从下拉中选择</span></h2>
+      <h2>进化分析 <span class="tail">Run = 一次进化（实时监控）；提交 = 一次最优上报（含种群明细）</span></h2>
       <div class="picker-row">
-        <input class="input" v-model="sid" placeholder="提交 ID（如 28）" style="max-width:200px" @keydown.enter="analyze">
-        <select class="input" v-model="recentSel" @change="pickRecent" style="max-width:360px">
-          <option value="">— 最近提交（全站）—</option>
-          <option v-for="s in recentList" :key="s.id" :value="String(s.id)">#{{ s.id }} · {{ fullName(s) }} · {{ s.problem_name || s.problem_key }} · {{ fmtObj(s.objective) }}</option>
+        <select class="input" v-model="runSel" style="max-width:300px" @change="pickRun">
+          <option value="">— 我的 Run（实时监控）—</option>
+          <option v-for="r in runs" :key="r.run_id" :value="String(r.run_id)">
+            Run #{{ r.run_id }} · {{ r.problem_key ?? "?" }} · {{ statusName(r.status) }} · {{ fmtObj(r.best_objective) }}
+          </option>
         </select>
-        <select class="input" v-model="mineSel" @change="pickMine" style="max-width:360px">
+        <select class="input" v-model="mineSel" style="max-width:330px" @change="pickMine">
           <option value="">— 我的提交 —</option>
           <option v-for="s in mySubs" :key="s.id" :value="String(s.id)">#{{ s.id }} · {{ s.problem_name || s.problem_key }} · {{ fmtObj(s.objective) }} · {{ fmtTime(s.created_at) }}</option>
         </select>
-        <button class="btn primary" @click="analyze">分析</button>
+        <select class="input" v-model="recentSel" style="max-width:300px" @change="pickRecent">
+          <option value="">— 最近提交（全站）—</option>
+          <option v-for="s in recent" :key="s.id" :value="String(s.id)">#{{ s.id }} · {{ fullName(s) }} · {{ s.problem_name || s.problem_key }} · {{ fmtObj(s.objective) }}</option>
+        </select>
       </div>
-      <div v-if="!getToken()" class="hint" style="margin-top:8px">登录后这里会多一个「我的提交」下拉，只列你自己的记录。</div>
-      <div v-else-if="!mySubs.length" class="hint" style="margin-top:8px">你还没有提交记录。</div>
+      <div class="picker-row" style="margin-top:8px">
+        <select class="input" v-model="manualType" style="max-width:130px">
+          <option value="submission">提交 ID</option>
+          <option value="run">Run ID</option>
+        </select>
+        <input class="input" v-model="manualId" placeholder="输入 ID" style="max-width:180px" @keydown.enter="goManual">
+        <button class="btn primary" @click="goManual">分析</button>
+        <span v-if="source" class="badge feature-badge">{{ source.type === 'run' ? 'Run #' + source.id + '（实时监控）' : '提交 #' + source.id }}</span>
+        <button v-if="isRunMode" class="btn small" style="margin-left:auto" @click="saveInstance">💾 保存实例</button>
+      </div>
+      <div class="error-banner" v-if="loadErr">{{ loadErr }}
+        <div v-if="err401" style="margin-top:8px"><button class="btn primary" @click="store.loginModal = true">登录 / 注册</button></div>
+      </div>
     </div>
 
-    <div v-if="state === 'idle'" class="card"><EmptyState icon="🧬" desc="选择一个提交，查看它的完整进化过程：每代适应度曲线、种群明细与 token 消耗" /></div>
-    <div v-else-if="state === 'loading'" class="card"><div class="loading-row"><span class="spinner"></span>正在拉取进化记录…</div></div>
-    <div v-else-if="state === 'err'" class="card">
-      <div class="error-banner">{{ errMsg }}</div>
-      <div v-if="err401" style="margin-top:8px"><button class="btn primary" @click="store.loginModal = true">登录 / 注册</button></div>
-    </div>
+    <div v-if="state === 'loading'" class="card"><div class="loading-row"><span class="spinner"></span>加载中…</div></div>
+    <div v-else-if="state === 'idle'" class="card"><EmptyState icon="🧬" desc="选择一个 Run 实时监控，或选择一个提交查看完整进化过程" /></div>
+
+    <!-- ==================== Run 模式 ==================== -->
+    <template v-else-if="isRunMode">
+      <div class="card">
+        <div class="picker-row">
+          <h2 style="margin:0">实时监控 <span class="tail">Run #{{ source.id }}</span></h2>
+          <span class="badge" :class="'evo-st-' + status.status" style="margin-left:12px">{{ statusName(status.status) }}</span>
+          <span class="chip-row" style="margin-left:auto">
+            <button class="btn small" :disabled="ctrlBusy || !isActive" @click="ctrl('pause')">⏸ 暂停</button>
+            <button class="btn small" :disabled="ctrlBusy || status.status !== 'paused'" @click="ctrl('resume')">▶ 继续</button>
+            <button class="btn small danger" :disabled="ctrlBusy || !isActive" @click="ctrl('stop')">⏹ 停止</button>
+            <button class="btn small" :disabled="ctrlBusy" @click="ctrl('submit')">🏆 提交最优</button>
+            <button class="btn small" @click="promptOpen = !promptOpen">📝 提示词</button>
+          </span>
+        </div>
+        <div class="error-banner" v-if="ctrlErr" style="margin-top:8px">{{ ctrlErr }}</div>
+        <div class="grid cols-4" style="margin-top:10px">
+          <div class="stat"><div class="k">最优适应度</div><div class="v mono">{{ fmtObj(status.best_objective) }}</div><div class="s">{{ popAsc ? "越小越好" : "越大越好" }} · {{ problemLabel }}</div></div>
+          <div class="stat"><div class="k">代数</div><div class="v mono">{{ status.current_generation ?? 0 }} / {{ status.total_generations ?? "—" }}</div><div class="s">共 {{ history.length }} 代进化记录</div></div>
+          <div class="stat"><div class="k">种群均值</div><div class="v mono">{{ fmtObj(lastHistory?.avg_objective) }}</div><div class="s">第 {{ lastHistory?.generation ?? "—" }} 代</div></div>
+          <div class="stat"><div class="k">进度 {{ status.progress != null ? Math.round(status.progress * 100) + "%" : "" }}</div>
+            <div class="progress-track" style="margin-top:10px"><div class="progress-fill" :style="{ width: (status.progress != null ? Math.round(status.progress * 100) : 0) + '%' }"></div></div></div>
+        </div>
+        <div v-if="promptOpen" style="margin-top:12px">
+          <div class="field"><label>{{ promptIsCode ? "框架代码（framework_code）" : "提示词组件（components JSON）" }}</label>
+            <textarea v-model="promptText" spellcheck="false" class="input mono" rows="8"></textarea></div>
+          <button class="btn small primary" @click="savePrompt">保存提示词</button>
+          <span class="hint" style="margin-left:8px">{{ promptState || "修改将注入下一代的进化提示" }}</span>
+        </div>
+      </div>
+
+      <div v-if="bestHeur" class="card">
+        <h2>最优算法 <span class="tail">第 {{ bestHeur.generation ?? "?" }} 代 · 适应度 {{ fmtObj(bestHeur.objective) }}</span></h2>
+        <p class="drawer-text" style="margin-bottom:8px">{{ bestHeur.concept || "（无描述）" }}</p>
+        <div v-if="bestHeur.algorithm" class="code-container">
+          <button class="btn small copy-btn" @click="copyText(bestHeur.algorithm)">复制</button>
+          <pre style="max-height:320px">{{ bestHeur.algorithm }}</pre></div>
+      </div>
+
+      <div v-if="popHeurs.length" class="card">
+        <h2>当代种群 <span class="tail">第 {{ pop?.generation ?? "?" }} 代 · {{ popHeurs.length }} 个个体</span></h2>
+        <div class="chart-box" v-html="popChart"></div>
+        <div class="pop-grid">
+          <button v-for="(h, i) in popHeurs" :key="i" class="pop-card" @click="showHeur(h, i)">
+            <span class="pop-rank">{{ i + 1 }}</span>
+            <span class="pop-obj mono">{{ fmtObj(h.objective) }}</span>
+            <span v-if="popBest != null && Number(h.objective) === popBest" class="badge src-local">本代最优</span>
+            <span class="pop-concept">{{ (h.concept || "").slice(0, 48) || "（无描述）" }}</span>
+            <span class="pop-tags"><span v-for="f in (h.features ?? []).slice(0, 3)" :key="f" class="badge feature-badge">{{ f }}</span></span>
+          </button>
+        </div>
+        <div v-if="pop && pop.memory" class="grid cols-2" style="margin-top:10px">
+          <div class="field"><label>CALM 正向记忆</label><div class="badge-row">
+            <span v-for="f in (pop.memory.positive_features ?? [])" :key="f" class="badge src-local">{{ f }}</span>
+            <span v-if="!(pop.memory.positive_features ?? []).length" class="hint">无</span></div></div>
+          <div class="field"><label>CALM 负向记忆</label><div class="badge-row">
+            <span v-for="f in (pop.memory.negative_features ?? [])" :key="f" class="badge src-api">{{ f }}</span>
+            <span v-if="!(pop.memory.negative_features ?? []).length" class="hint">无</span></div></div>
+        </div>
+      </div>
+
+      <div v-if="top3.length" class="card">
+        <h2>前三算法适应度 <span class="tail">第 {{ lastHistory?.generation ?? "?" }} 代</span></h2>
+        <div class="chart-box" v-html="top3Chart"></div>
+      </div>
+
+      <div class="card">
+        <h2>历代最优 / 均值<span v-if="hasVariance"> / 方差</span></h2>
+        <div class="legend">
+          <span><span class="dot" style="background:#22d3ee"></span>最优</span>
+          <span><span class="dot" style="background:#a78bfa"></span>均值</span>
+          <span v-if="hasVariance"><span class="dot" style="background:#fb7185"></span>方差</span>
+        </div>
+        <div class="chart-box" v-html="histChart"></div>
+      </div>
+
+      <div v-if="tokenHistory.length" class="card">
+        <h2>Token 消耗</h2>
+        <div class="grid cols-3">
+          <div class="stat"><div class="k">累计输入</div><div class="v mono" style="font-size:18px">{{ fmtTokens(lastTok.prompt_tokens) }}</div></div>
+          <div class="stat"><div class="k">累计输出</div><div class="v mono" style="font-size:18px">{{ fmtTokens(lastTok.completion_tokens) }}</div></div>
+          <div class="stat"><div class="k">累计总量</div><div class="v mono" style="font-size:18px">{{ fmtTokens(lastTok.total_tokens) }}</div></div>
+        </div>
+        <div class="chart-box" style="margin-top:10px" v-html="tokDeltaChart"></div>
+      </div>
+      <div v-else class="card"><div class="hint">暂无 token 用量数据（新进化接入 LLM usage 后生成）。</div></div>
+    </template>
+
+    <!-- ==================== 提交模式 ==================== -->
     <template v-else-if="rec">
       <div v-if="!rec.instance" class="card">
         <div class="error-banner">该提交未关联进化任务（实例），因此没有种群快照，无法绘制曲线。</div>
-        <p class="hint">通常原因：发起这次进化的前端在启动时没有创建实例（AHGS NOVA 旧版本的缺陷，现已修复）。若是历史遗留提交，可在「进化」页打开该 Run，点「💾 保存实例」补建后重新「🏆 提交最优」。</p>
+        <p class="hint">通常原因：发起这次进化的前端在启动时没有创建实例（旧版缺陷，现已修复）。历史遗留提交可在「进化」页打开对应 Run，点「保存实例」补建后重新提交。</p>
       </div>
       <template v-else>
         <div class="grid cols-4">
-          <div class="stat"><div class="k">最终最优适应度</div><div class="v mono">{{ fmtObj(subObjective) }}</div><div class="s">{{ asc ? "越小越好" : "越大越好" }}</div></div>
+          <div class="stat"><div class="k">最终最优适应度</div><div class="v mono">{{ fmtObj(subObjective) }}</div><div class="s">{{ asc ? "越小越好" : "越大越好" }} · {{ problemLabel }}</div></div>
           <div class="stat"><div class="k">相对首代提升</div><div class="v mono">{{ improve == null ? "—" : improve.toFixed(2) + "%" }}</div><div class="s">{{ firstBest != null ? "首代最优 " + fmtObj(firstBest) : "" }}</div></div>
           <div class="stat"><div class="k">进化代数 / 个体</div><div class="v mono">{{ gens.length }} <small style="font-size:14px;color:var(--text-faint)">代</small> / {{ heurCount }}</div><div class="s">种群快照统计</div></div>
           <div class="stat"><div class="k">总 token</div><div class="v mono">{{ anyTok ? fmtTokens(tokTotal) : "—" }}</div><div class="s">{{ sub.llm_model || "" }}</div></div>
@@ -76,6 +175,13 @@ const CurveView = {
               <span v-for="f in (sub.features ?? [])" :key="f" class="badge feature-badge">{{ f }}</span>
               <span v-if="!(sub.features ?? []).length" class="hint">无</span></div></div>
           </div>
+        </div>
+        <div v-if="bestInd" class="card">
+          <h2>最优算法 <span class="tail">第 {{ bestInd.generation ?? "?" }} 代 · 适应度 {{ fmtObj(bestInd.objective) }}</span></h2>
+          <p class="drawer-text" style="margin-bottom:8px">{{ bestInd.concept || "（无描述）" }}</p>
+          <div v-if="bestInd.algorithm" class="code-container">
+            <button class="btn small copy-btn" @click="copyText(bestInd.algorithm)">复制</button>
+            <pre style="max-height:320px">{{ bestInd.algorithm }}</pre></div>
         </div>
         <div v-if="tokSeries.length" class="card"><h2>每代 token 消耗</h2>
           <div class="chart-box" v-html="tokChart"></div></div>
@@ -118,429 +224,235 @@ const CurveView = {
       </template>
     </template>
   </div>`,
-    setup(props) {
-        const sid = ref(props.params.get("id") || "");
-        const recentList = ref([]),
-            mySubs = ref([]);
-        const recentSel = ref(""),
-            mineSel = ref("");
-        const state = ref(sid.value ? "loading" : "idle");
-        const rec = ref(null),
-            errMsg = ref(""),
-            err401 = ref(false);
+  props: ["params"],
+  setup(props) {
+    const runs = ref([]), mySubs = ref([]), recent = ref([]);
+    const runSel = ref(""), mineSel = ref(""), recentSel = ref("");
+    const manualType = ref("submission"), manualId = ref("");
+    const source = ref(null);           // {type:'run'|'submission', id}
+    const state = ref("idle"), loadErr = ref(""), err401 = ref(false);
 
-        onMounted(async () => {
-            recentList.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
-            if (getToken()) mySubs.value = await api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []);
-            if (sid.value) analyze();
-        });
+    // run 模式
+    const status = ref({}), results = ref(null), pop = ref(null);
+    const ctrlBusy = ref(false), ctrlErr = ref("");
+    const promptOpen = ref(false), promptText = ref(""), promptIsCode = ref(false), promptState = ref("");
+    const monitorKeyOverride = ref(null);
+    let pollTimer = null;
 
-        const inst = computed(() => rec.value?.instance ?? null);
-        const sub = computed(() => rec.value?.submission ?? {});
-        const cfg = computed(() => inst.value?.config ?? {});
-        const asc = computed(() => cfg.value.ascend !== false);
-        const gens = computed(() => ((inst.value?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)));
-        const genStats = computed(() => gens.value.map(g => {
-            const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
-            return {
-                n: objs.length,
-                best: objs.length ? (asc.value ? Math.min(...objs) : Math.max(...objs)) : null,
-                avg: objs.length ? objs.reduce((a, b) => a + b, 0) / objs.length : null,
-                worst: objs.length ? (asc.value ? Math.max(...objs) : Math.min(...objs)) : null,
-                tok: tokOf(g.token_usage),
-            };
-        }));
+    // submission 模式
+    const rec = ref(null);
 
-        function tokOf(t) {
-            if (t == null) return null;
-            if (typeof t === "number") return t;
-            if (typeof t === "object") return t.total_tokens ?? t.total ?? t.tokens ?? null;
-            return null;
-        }
-        const gensWithHeurs = computed(() => gens.value.map((g, gi) => ({
-            ...g,
-            sorted: (g.heuristics ?? []).slice().sort((a, b) => {
-                const x = Number(a?.objective),
-                    y = Number(b?.objective);
-                if (!isFinite(x) && !isFinite(y)) return 0;
-                if (!isFinite(x)) return 1;
-                if (!isFinite(y)) return -1;
-                return asc.value ? x - y : y - x;
-            }),
-        })));
-        const bestPts = computed(() => genStats.value.map((s, i) => ({
-            x: gens.value[i].generation ?? i,
-            y: s.best,
-            label: "第 " + (gens.value[i].generation ?? i) + " 代"
-        })).filter(p => p.y != null));
-        const avgPts = computed(() => genStats.value.map((s, i) => ({
-            x: gens.value[i].generation ?? i,
-            y: s.avg,
-            label: "第 " + (gens.value[i].generation ?? i) + " 代"
-        })).filter(p => p.y != null));
-        const mainChart = computed(() => lineChartSVG([{
-                name: "每代最优",
-                color: "#22d3ee",
-                points: bestPts.value
-            },
-            {
-                name: "每代平均",
-                color: "#a78bfa",
-                dashed: true,
-                points: avgPts.value
-            },
-        ], {
-            yLabel: "适应度"
-        }));
-        const heurCount = computed(() => genStats.value.reduce((a, s) => a + s.n, 0));
-        const firstBest = computed(() => bestPts.value[0]?.y ?? null);
-        const finalBest = computed(() => bestPts.value.at(-1)?.y ?? null);
-        const improve = computed(() => {
-            const f = firstBest.value,
-                l = finalBest.value;
-            if (f == null || l == null || f === 0) return null;
-            return (asc.value ? (f - l) / Math.abs(f) : (l - f) / Math.abs(f)) * 100;
-        });
-        const anyTok = computed(() => genStats.value.some(s => s.tok != null));
-        const tokTotal = computed(() => genStats.value.reduce((a, s) => a + (s.tok ?? 0), 0));
-        const tokSeries = computed(() => genStats.value.map((s, i) => ({
-            label: String(gens.value[i].generation ?? i),
-            value: s.tok ?? 0,
-            tip: "第 " + (gens.value[i].generation ?? i) + " 代"
-        })));
-        const tokChart = computed(() => barChartSVG(tokSeries.value));
-        const subObjective = computed(() => sub.value.objective ?? finalBest.value);
-        const customCode = computed(() => inst.value?.framework_type === "custom" ? (cfg.value.framework_code ?? "") : "");
+    onMounted(async () => {
+      runs.value = await api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []);
+      mySubs.value = getToken() ? await api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []) : [];
+      recent.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
+      const runP = props.params.get("run"), idP = props.params.get("id");
+      if (runP) { source.value = { type: "run", id: Number(runP) }; runSel.value = runP; loadRun(); }
+      else if (idP) { source.value = { type: "submission", id: idP }; loadSubmission(idP); }
+    });
+    onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); });
 
-        function pickRecent() {
-            if (recentSel.value) {
-                sid.value = recentSel.value;
-                analyze();
-            }
-        }
+    function pickRun() { if (runSel.value) { mineSel.value = recentSel.value = ""; loadSource("run", Number(runSel.value)); } }
+    function pickMine() { if (mineSel.value) { runSel.value = recentSel.value = ""; loadSource("submission", mineSel.value); } }
+    function pickRecent() { if (recentSel.value) { runSel.value = mineSel.value = ""; loadSource("submission", recentSel.value); } }
+    function goManual() {
+      const id = String(manualId.value).trim();
+      if (!id) { toast("请输入 ID", "err"); return; }
+      runSel.value = mineSel.value = recentSel.value = "";
+      loadSource(manualType.value, manualType.value === "run" ? Number(id) : id);
+    }
+    function loadSource(type, id) {
+      source.value = { type, id };
+      state.value = "loading"; loadErr.value = ""; err401.value = false;
+      results.value = null; pop.value = null; rec.value = null; status.value = {};
+      try { history.replaceState(null, "", type === "run" ? `#/curve?run=${id}` : `#/curve?id=${id}`); } catch {}
+      if (type === "run") loadRun(); else loadSubmission(id);
+    }
 
-        function pickMine() {
-            if (mineSel.value) {
-                sid.value = mineSel.value;
-                analyze();
-            }
-        }
-        async function analyze() {
-            const id = String(sid.value).trim();
-            if (!id) {
-                toast("请先填写提交 ID", "err");
-                return;
-            }
-            try {
-                history.replaceState(null, "", "#/curve?id=" + encodeURIComponent(id));
-            } catch {}
-            store.route = {
-                name: "curve",
-                params: new URLSearchParams({
-                    id
-                })
-            };
-            state.value = "loading";
-            err401.value = false;
-            try {
-                rec.value = await api(`/api/submissions/${id}/record`);
-                state.value = "done";
-            } catch (e) {
-                state.value = "err";
-                errMsg.value = e.message;
-                err401.value = e.status === 401;
-            }
-        }
-        return {
-            store,
-            getToken,
-            sid,
-            recentList,
-            mySubs,
-            recentSel,
-            mineSel,
-            pickRecent,
-            pickMine,
-            state,
-            rec,
-            errMsg,
-            err401,
-            analyze,
-            inst,
-            sub,
-            cfg,
-            asc,
-            gens,
-            genStats,
-            gensWithHeurs,
-            mainChart,
-            tokChart,
-            tokSeries,
-            heurCount,
-            firstBest,
-            improve,
-            anyTok,
-            tokTotal,
-            subObjective,
-            customCode,
-            fmtObj,
-            fmtTokens,
-            fmtTime,
-            fullName,
-            copyText,
-            EmptyState,
-            FwBadge,
-            SrcBadge,
-            Avatar
-        };
-    },
+    /* ---------- run 模式 ---------- */
+    const runProblemKey = computed(() => {
+      const fromList = runs.value.find(r => r.run_id === source.value?.id)?.problem_key;
+      return monitorKeyOverride.value ?? fromList ?? null;
+    });
+    async function loadRun() {
+      try {
+        status.value = await api(`/api/evolution/${source.value.id}/status`);
+        await loadRunResults();
+        state.value = "done";
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(async () => {
+          if (!source.value || source.value.type !== "run") return;
+          try {
+            const st = await api(`/api/evolution/${source.value.id}/status`);
+            status.value = st;
+            await loadRunResults();
+            if (!STATUS_ACTIVE.has(st.status) && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          } catch {}
+        }, 3000);
+      } catch (e) {
+        state.value = "idle"; loadErr.value = e.message; err401.value = e.status === 401;
+      }
+    }
+    async function loadRunResults() {
+      try { results.value = await api(`/api/evolution/${source.value.id}/results`); } catch {}
+      try { pop.value = await api(`/api/evolution/${source.value.id}/population`); } catch {}
+    }
+    const resultsLoaded = computed(() => !!results.value);
+    const history = computed(() => results.value?.history ?? []);
+    const lastHistory = computed(() => history.value.at(-1) ?? {});
+    const hasVariance = computed(() => history.value.some(h => h.variance != null));
+    const bestHeur = computed(() => results.value?.best_heuristic ?? null);
+    const top3 = computed(() => lastHistory.value.top3 ?? []);
+    const tokenHistory = computed(() => results.value?.token_history ?? []);
+    const lastTok = computed(() => tokenHistory.value.at(-1) ?? {});
+    const popAsc = computed(() => isAscend(runProblemKey.value));
+    const popHeurs = computed(() => (pop.value?.heuristics ?? []).slice().sort((a, b) => {
+      const x = Number(a?.objective), y = Number(b?.objective);
+      if (!isFinite(x) && !isFinite(y)) return 0;
+      if (!isFinite(x)) return 1;
+      if (!isFinite(y)) return -1;
+      return popAsc.value ? x - y : y - x;
+    }));
+    const popBest = computed(() => {
+      const objs = popHeurs.value.map(h => Number(h?.objective)).filter(isFinite);
+      return objs.length ? (popAsc.value ? Math.min(...objs) : Math.max(...objs)) : null;
+    });
+    const popChart = computed(() => barChartSVG(popHeurs.value.map((h, i) => ({ label: String(i + 1), value: Number(h?.objective ?? 0), tip: h?.concept || `个体 ${i + 1}` })), { height: 140 }));
+    const top3Chart = computed(() => barChartSVG(top3.value.map((t, i) => ({ label: "#" + (i + 1), value: Number(t.objective), tip: t.concept || `#${i + 1}` }))));
+    const histChart = computed(() => lineChartSVG([
+      { name: "最优", color: "#22d3ee", points: history.value.map((h, i) => ({ x: h.generation ?? i, y: h.best_objective, label: "第 " + (h.generation ?? i) + " 代" })).filter(p => p.y != null) },
+      { name: "均值", color: "#a78bfa", points: history.value.map((h, i) => ({ x: h.generation ?? i, y: h.avg_objective, label: "第 " + (h.generation ?? i) + " 代" })).filter(p => p.y != null) },
+      { name: "方差", color: "#fb7185", dashed: true, points: hasVariance.value ? history.value.map((h, i) => ({ x: h.generation ?? i, y: h.variance, label: "第 " + (h.generation ?? i) + " 代" })).filter(p => p.y != null) : [] },
+    ], { yLabel: "适应度", xFormat: x => "第" + Math.round(x) + "代" }));
+    const tokDeltaChart = computed(() => barChartSVG(tokenHistory.value.map((t, i) => ({
+      label: String(t.generation ?? i), value: Math.max(0, (t.total_tokens ?? 0) - (i > 0 ? tokenHistory.value[i - 1].total_tokens ?? 0 : 0)), tip: `第 ${t.generation ?? i} 代消耗`,
+    }))));
+    const isActive = computed(() => STATUS_ACTIVE.has(status.value.status));
+    async function ctrl(action) {
+      if (!source.value) return;
+      ctrlErr.value = ""; ctrlBusy.value = true;
+      try {
+        await api(`/api/evolution/${source.value.id}/${action}`, { method: "POST" });
+        toast({ stop: "已停止", pause: "已暂停", resume: "已继续", submit: "当前最优已提交到排行榜" }[action] ?? "操作成功", "ok");
+        try { status.value = await api(`/api/evolution/${source.value.id}/status`); } catch {}
+        loadRunResults();
+      } catch (e) {
+        ctrlErr.value = (action === "submit" ? "提交失败：" : "操作失败：") + e.message;
+        toast(ctrlErr.value, "err");
+      }
+      finally { ctrlBusy.value = false; }
+    }
+    async function saveInstance() {
+      ctrlErr.value = ""; ctrlBusy.value = true;
+      try {
+        const snapshot = pop.value?.heuristics ? [{
+          generation: pop.value.generation ?? 0,
+          heuristics: (pop.value.heuristics ?? []).map(h => ({ concept: h.concept, algorithm: h.algorithm, features: h.features ?? [], objective: h.objective == null || h.objective === Infinity ? null : h.objective })),
+          memory: pop.value.memory ?? { positive_features: [], negative_features: [] },
+        }] : [];
+        const name = `实例_${runProblemKey.value ?? "unknown"}_${new Date().toLocaleString("zh-CN").replace(/[/: ]/g, "-")}`;
+        await api("/api/instances", { method: "POST", body: { name, framework_type: "custom", problem_key: runProblemKey.value, config: { note: "从进化分析页保存" }, run_id: source.value.id, population_snapshot: snapshot } });
+        toast(`实例已保存：${name}`, "ok");
+      } catch (e) { ctrlErr.value = e.message; }
+      finally { ctrlBusy.value = false; }
+    }
+    watch(promptOpen, async open => {
+      if (!open || !source.value) return;
+      promptState.value = "";
+      try {
+        const p = await api(`/api/evolution/${source.value.id}/prompt`);
+        promptIsCode.value = p.framework_code != null;
+        promptText.value = promptIsCode.value ? p.framework_code : JSON.stringify(p.components ?? {}, null, 2);
+      } catch (e) { promptText.value = "加载失败：" + e.message; }
+    });
+    async function savePrompt() {
+      try {
+        const body = promptIsCode.value ? { framework_code: promptText.value } : { components: JSON.parse(promptText.value) };
+        await api(`/api/evolution/${source.value.id}/prompt`, { method: "POST", body });
+        promptState.value = "✔ 已保存";
+        toast("提示词已保存", "ok");
+      } catch (e) { promptState.value = "✘ " + e.message; }
+    }
+    function showHeur(h, i) {
+      store.drawer = { comp: "heur-detail", props: { h, gen: pop.value?.generation ?? "?", idx: i } };
+    }
+
+    /* ---------- submission 模式 ---------- */
+    const inst = computed(() => rec.value?.instance ?? null);
+    const sub = computed(() => rec.value?.submission ?? {});
+    const cfg = computed(() => inst.value?.config ?? {});
+    const asc = computed(() => cfg.value.ascend !== false);
+    const gens = computed(() => ((inst.value?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)));
+    const genStats = computed(() => gens.value.map(g => {
+      const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
+      return {
+        n: objs.length,
+        best: objs.length ? (asc.value ? Math.min(...objs) : Math.max(...objs)) : null,
+        avg: objs.length ? objs.reduce((a, b) => a + b, 0) / objs.length : null,
+        worst: objs.length ? (asc.value ? Math.max(...objs) : Math.min(...objs)) : null,
+        tok: tokOf(g.token_usage),
+      };
+    }));
+    function tokOf(t) {
+      if (t == null) return null;
+      if (typeof t === "number") return t;
+      if (typeof t === "object") return t.total_tokens ?? t.total ?? t.tokens ?? null;
+      return null;
+    }
+    const gensWithHeurs = computed(() => gens.value.map((g, gi) => ({
+      ...g,
+      sorted: (g.heuristics ?? []).slice().sort((a, b) => {
+        const x = Number(a?.objective), y = Number(b?.objective);
+        if (!isFinite(x) && !isFinite(y)) return 0;
+        if (!isFinite(x)) return 1;
+        if (!isFinite(y)) return -1;
+        return asc.value ? x - y : y - x;
+      }),
+    })));
+    const bestPts = computed(() => genStats.value.map((s, i) => ({ x: gens.value[i].generation ?? i, y: s.best, label: "第 " + (gens.value[i].generation ?? i) + " 代" })).filter(p => p.y != null));
+    const avgPts = computed(() => genStats.value.map((s, i) => ({ x: gens.value[i].generation ?? i, y: s.avg, label: "第 " + (gens.value[i].generation ?? i) + " 代" })).filter(p => p.y != null));
+    const mainChart = computed(() => lineChartSVG([
+      { name: "每代最优", color: "#22d3ee", points: bestPts.value },
+      { name: "每代平均", color: "#a78bfa", dashed: true, points: avgPts.value },
+    ], { yLabel: "适应度" }));
+    const heurCount = computed(() => genStats.value.reduce((a, s) => a + s.n, 0));
+    const firstBest = computed(() => bestPts.value[0]?.y ?? null);
+    const finalBest = computed(() => bestPts.value.at(-1)?.y ?? null);
+    const improve = computed(() => {
+      const f = firstBest.value, l = finalBest.value;
+      if (f == null || l == null || f === 0) return null;
+      return (asc.value ? (f - l) / Math.abs(f) : (l - f) / Math.abs(f)) * 100;
+    });
+    const anyTok = computed(() => genStats.value.some(s => s.tok != null));
+    const tokTotal = computed(() => genStats.value.reduce((a, s) => a + (s.tok ?? 0), 0));
+    const tokSeries = computed(() => genStats.value.map((s, i) => ({ label: String(gens.value[i].generation ?? i), value: s.tok ?? 0, tip: "第 " + (gens.value[i].generation ?? i) + " 代" })));
+    const tokChart = computed(() => barChartSVG(tokSeries.value));
+    const subObjective = computed(() => sub.value.objective ?? finalBest.value);
+    const customCode = computed(() => inst.value?.framework_type === "custom" ? (cfg.value.framework_code ?? "") : "");
+    const bestInd = computed(() => {
+      const last = gensWithHeurs.value.at(-1);
+      return last?.sorted?.[0] ? { ...last.sorted[0], generation: last.generation } : null;
+    });
+    async function loadSubmission(id) {
+      try {
+        rec.value = await api(`/api/submissions/${id}/record`);
+        state.value = "done";
+      } catch (e) {
+        state.value = "idle"; loadErr.value = e.message; err401.value = e.status === 401;
+      }
+    }
+    const problemLabel = computed(() => {
+      if (source.value?.type === "run") return runProblemKey.value ?? "—";
+      const pk = sub.value.problem_key || inst.value?.problem_key;
+      return (store.problems.find(p => p.key === pk) || {}).name || pk || "—";
+    });
+
+    return { store, getToken, runs, mySubs, recent, runSel, mineSel, recentSel, manualType, manualId, source, state, loadErr, err401, pickRun, pickMine, pickRecent, goManual,
+      status, results, resultsLoaded, pop, ctrlBusy, ctrlErr, promptOpen, promptText, promptIsCode, promptState, ctrl, saveInstance, savePrompt, showHeur,
+      history, lastHistory, hasVariance, bestHeur, top3, tokenHistory, lastTok, popHeurs, popBest, popChart, top3Chart, histChart, tokDeltaChart, isActive,
+      rec, inst, sub, cfg, asc, gens, genStats, gensWithHeurs, mainChart, heurCount, firstBest, improve, anyTok, tokTotal, tokSeries, tokChart, subObjective, customCode, bestInd,
+      problemLabel, isRunMode: computed(() => source.value?.type === "run"), popAsc,
+      statusName: s => STATUS_LABEL[s] ?? s ?? "—", fmtObj, fmtTokens, fmtTime, fullName, copyText };
+  },
 };
-ROUTE_COMPS.curve = CurveView;
-
-/* ==================== 双提交对比 ==================== */
-const CompareView = {
-    components: {
-        EmptyState,
-        FwBadge,
-        SrcBadge,
-        Avatar
-    },
-    props: ["params"],
-    template: `
-  <div>
-    <div class="card">
-      <h2>双提交对比 <span class="tail">对比两次提交的进化过程与最终成绩</span></h2>
-      <div class="vs-grid">
-        <div class="field"><label>提交 A</label>
-          <div class="picker-row">
-            <input class="input" v-model="idA" placeholder="提交 ID" style="max-width:110px">
-            <select class="input" v-model="pickA" style="flex:1">
-              <option value="">— 从最近提交选择 —</option>
-              <option v-for="s in recent" :key="s.id" :value="String(s.id)">#{{ s.id }} · {{ fullName(s) }} · {{ s.problem_name || s.problem_key }} · {{ fmtObj(s.objective) }}</option>
-            </select>
-          </div>
-        </div>
-        <div class="vs-mid">VS</div>
-        <div class="field"><label>提交 B</label>
-          <div class="picker-row">
-            <input class="input" v-model="idB" placeholder="提交 ID" style="max-width:110px">
-            <select class="input" v-model="pickB" style="flex:1">
-              <option value="">— 从最近提交选择 —</option>
-              <option v-for="s in recent" :key="s.id" :value="String(s.id)">#{{ s.id }} · {{ fullName(s) }} · {{ s.problem_name || s.problem_key }} · {{ fmtObj(s.objective) }}</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div style="margin-top:12px"><button class="btn primary" @click="run">开始对比</button>
-        <span class="hint" style="margin-left:10px">提示：在排行榜 / 实时流的详情抽屉里可以快速跳转曲线分析</span></div>
-    </div>
-    <div v-if="state === 'loading'" class="card"><div class="loading-row"><span class="spinner"></span>对比数据加载中…</div></div>
-    <div v-else-if="state === 'err'" class="card">
-      <div class="error-banner">{{ errMsg }}</div>
-      <div v-if="err401" style="margin-top:8px"><button class="btn primary" @click="store.loginModal = true">登录 / 注册</button></div>
-    </div>
-    <div v-else-if="state === 'done' && A && B">
-      <div v-if="!sameProblem" class="card"><div class="error-banner">⚠️ 两次提交分属不同问题，适应度不可直接比较，仅对比进化过程。</div></div>
-      <div class="vs-grid">
-        <div class="card"><h2>🅰 提交 A <span class="mono hint">#{{ A.id }}</span></h2>
-          <div class="user-cell" style="margin-bottom:8px"><Avatar :user="A.sub" />
-            <div class="u-name"><span class="u-main">{{ fullName(A.sub) }}</span><span class="u-sub mono">{{ A.sub.username ?? "" }}</span></div></div>
-          <div class="grid-2">
-            <div class="kv"><span class="k">问题</span><span>{{ A.sub.problem_name || A.sub.problem_key || A.inst?.name || "—" }}</span></div>
-            <div class="kv"><span class="k">框架</span><FwBadge :ft="A.sub.framework_type ?? A.inst?.framework_type" /></div>
-            <div class="kv"><span class="k">适应度</span><span class="mono">{{ fmtObj(A.sub.objective) }}</span></div>
-            <div class="kv"><span class="k">token</span><span class="mono">{{ fmtTokens(A.sub.total_tokens) }}</span></div>
-            <div class="kv"><span class="k">模型</span><span class="mono">{{ A.sub.llm_model || "—" }}</span></div>
-            <div class="kv"><span class="k">代数</span><span class="mono">{{ A.gens.length }}</span></div>
-          </div>
-          <div class="field" style="margin-top:8px"><label>启发式思想</label><p class="drawer-text">{{ A.sub.concept ?? "—" }}</p></div>
-        </div>
-        <div class="vs-mid">VS</div>
-        <div class="card"><h2>🅱 提交 B <span class="mono hint">#{{ B.id }}</span></h2>
-          <div class="user-cell" style="margin-bottom:8px"><Avatar :user="B.sub" />
-            <div class="u-name"><span class="u-main">{{ fullName(B.sub) }}</span><span class="u-sub mono">{{ B.sub.username ?? "" }}</span></div></div>
-          <div class="grid-2">
-            <div class="kv"><span class="k">问题</span><span>{{ B.sub.problem_name || B.sub.problem_key || B.inst?.name || "—" }}</span></div>
-            <div class="kv"><span class="k">框架</span><FwBadge :ft="B.sub.framework_type ?? B.inst?.framework_type" /></div>
-            <div class="kv"><span class="k">适应度</span><span class="mono">{{ fmtObj(B.sub.objective) }}</span></div>
-            <div class="kv"><span class="k">token</span><span class="mono">{{ fmtTokens(B.sub.total_tokens) }}</span></div>
-            <div class="kv"><span class="k">模型</span><span class="mono">{{ B.sub.llm_model || "—" }}</span></div>
-            <div class="kv"><span class="k">代数</span><span class="mono">{{ B.gens.length }}</span></div>
-          </div>
-          <div class="field" style="margin-top:8px"><label>启发式思想</label><p class="drawer-text">{{ B.sub.concept ?? "—" }}</p></div>
-        </div>
-      </div>
-      <div class="card">
-        <h2>关键指标对比 <span class="tail">左 A · 中差值（绿色=B 更优）· 右 B</span></h2>
-        <div v-for="row in deltaRows" :key="row.label" class="kv">
-          <span class="k">{{ row.label }}</span>
-          <span class="mono">{{ row.va }}</span>
-          <span :class="row.cls">{{ row.dv }}</span>
-          <span class="mono">{{ row.vb }}</span>
-        </div>
-      </div>
-      <div class="card"><h2>进化提升率对比</h2>
-        <div class="legend"><span><span class="dot" style="background:#22d3ee"></span>提交 A</span><span><span class="dot" style="background:#f472b6"></span>提交 B</span></div>
-        <div class="chart-box" v-html="overlayChart"></div>
-        <p class="hint" style="margin-bottom:0">纵轴 = 相对各自首代最优的提升百分比，横轴为代数。</p>
-      </div>
-      <div class="grid cols-2">
-        <div class="card"><h2>#{{ A.id }} 每代最优</h2><div class="chart-box" v-html="chartA"></div></div>
-        <div class="card"><h2>#{{ B.id }} 每代最优</h2><div class="chart-box" v-html="chartB"></div></div>
-      </div>
-    </div>
-    <div v-else class="card"><EmptyState icon="⚔️" desc="选择两个提交开始对比" /></div>
-  </div>`,
-    setup() {
-        const recent = ref([]);
-        const idA = ref(""),
-            idB = ref(""),
-            pickA = ref(""),
-            pickB = ref("");
-        const state = ref("idle"),
-            errMsg = ref(""),
-            err401 = ref(false);
-        const A = ref(null),
-            B = ref(null);
-        onMounted(() => {
-            recent.value = api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
-        });
-        watch(pickA, v => {
-            if (v) idA.value = v;
-        });
-        watch(pickB, v => {
-            if (v) idB.value = v;
-        });
-
-        async function fetchOne(id) {
-            if (!id) throw new Error("请填写两侧的提交 ID");
-            const recData = await api(`/api/submissions/${id}/record`);
-            const instData = recData.instance;
-            const cfg = instData?.config ?? {};
-            const asc = cfg.ascend !== false;
-            const gens = ((instData?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0));
-            const bests = gens.map(g => {
-                const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
-                return objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;
-            });
-            return {
-                id,
-                sub: recData.submission ?? {},
-                inst: instData,
-                asc,
-                gens,
-                bests
-            };
-        }
-        const sameProblem = computed(() => A.value && B.value && (A.value.sub.problem_key || A.value.inst?.problem_key) === (B.value.sub.problem_key || B.value.inst?.problem_key));
-
-        function improveSeries(d) {
-            const first = d.bests.find(isFinite);
-            if (first == null || first === 0) return [];
-            return d.bests.map((v, i) => isFinite(v) ? {
-                x: i,
-                y: d.asc ? (first - v) / Math.abs(first) * 100 : (v - first) / Math.abs(first) * 100,
-                label: `#${d.id} 第 ${i} 代`,
-            } : null).filter(Boolean);
-        }
-        const overlayChart = computed(() => {
-            if (!A.value || !B.value) return "";
-            return lineChartSVG([{
-                    name: "A 提升%",
-                    color: "#22d3ee",
-                    points: improveSeries(A.value)
-                },
-                {
-                    name: "B 提升%",
-                    color: "#f472b6",
-                    points: improveSeries(B.value)
-                },
-            ], {
-                yLabel: "相对首代提升 %",
-                xFormat: x => "第" + Math.round(x) + "代"
-            });
-        });
-        const chartA = computed(() => !A.value ? "" : lineChartSVG([{
-            name: "每代最优",
-            color: "#22d3ee",
-            points: A.value.bests.map((v, i) => ({
-                x: i,
-                y: v,
-                label: "第 " + i + " 代"
-            })).filter(p => p.y != null)
-        }]));
-        const chartB = computed(() => !B.value ? "" : lineChartSVG([{
-            name: "每代最优",
-            color: "#f472b6",
-            points: B.value.bests.map((v, i) => ({
-                x: i,
-                y: v,
-                label: "第 " + i + " 代"
-            })).filter(p => p.y != null)
-        }]));
-        const deltaRows = computed(() => {
-            if (!A.value || !B.value) return [];
-            const ascend = isAscend(A.value.sub.problem_key || A.value.inst?.problem_key);
-            const mk = (label, va, vb, fmt, better) => {
-                if (label === "适应度") better = ascend ? "low" : "high";
-                const na = va ?? null,
-                    nb = vb ?? null;
-                const dv = na != null && nb != null ? nb - na : null;
-                let cls = "";
-                if (dv != null && dv !== 0) cls = (better === "low" ? dv < 0 : dv > 0) ? "delta-up" : "delta-down";
-                return {
-                    label,
-                    va: fmt(na),
-                    vb: fmt(nb),
-                    dv: dv == null ? "—" : (dv > 0 ? "+" : "") + fmt(dv),
-                    cls
-                };
-            };
-            const heurN = d => d.gens.reduce((a, g) => a + (g.heuristics?.length ?? 0), 0);
-            return [
-                mk("适应度", A.value.sub.objective, B.value.sub.objective, fmtObj, "low"),
-                mk("所耗 token", A.value.sub.total_tokens, B.value.sub.total_tokens, fmtTokens, "low"),
-                mk("进化代数", A.value.gens.length, B.value.gens.length, v => String(v ?? "—"), "low"),
-                mk("种群个体总数", heurN(A.value), heurN(B.value), v => String(v ?? "—"), "low"),
-            ];
-        });
-        async function run() {
-            state.value = "loading";
-            err401.value = false;
-            try {
-                const [a, b] = await Promise.all([fetchOne(String(idA.value).trim()), fetchOne(String(idB.value).trim())]);
-                A.value = a;
-                B.value = b;
-                state.value = "done";
-            } catch (e) {
-                state.value = "err";
-                errMsg.value = e.message;
-                err401.value = e.status === 401;
-            }
-        }
-        return {
-            store,
-            recent,
-            idA,
-            idB,
-            pickA,
-            pickB,
-            state,
-            errMsg,
-            err401,
-            A,
-            B,
-            sameProblem,
-            overlayChart,
-            chartA,
-            chartB,
-            deltaRows,
-            run,
-            fmtObj,
-            fmtTokens,
-            fullName,
-            store: store
-        };
-    },
-};
-ROUTE_COMPS.compare = CompareView;
+ROUTE_COMPS.curve = AnalysisView;

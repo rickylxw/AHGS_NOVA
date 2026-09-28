@@ -84,7 +84,7 @@ const MineView = {
               <td class="num mono">{{ r.run_id }}</td><td class="mono">{{ r.problem_key ?? "—" }}</td>
               <td><span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span></td>
               <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
-              <td><a class="btn small" :href="'#/evo?run=' + r.run_id">监控 →</a></td>
+              <td><a class="btn small" :href="'#/curve?run=' + r.run_id">监控 →</a></td>
             </tr>
           </tbody>
         </table></div>
