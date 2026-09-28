@@ -1,0 +1,16 @@
+# 平台提交与实验代码（不属于本前端项目）
+framework*.py
+heuristic_*.py
+test_*.py
+_prob_*.json
+_runs.json
+_launch_runs.py
+AHGS-*.md
+__pycache__/
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
