@@ -713,10 +713,9 @@ async function viewCompare(view) {
     </div>`;
     }
 
-    const ascendCmp = isAscend(A.sub.problem_key || A.inst?.problem_key);
 
-    function deltaRow(label, va, vb, fmt, better) {
-        if (label === "适应度") better = ascendCmp ? "low" : "high";
+    function deltaRow(label, va, vb, fmt, better, ascend) {
+        if (label === "适应度") better = ascend ? "low" : "high";
         const dv = va != null && vb != null ? vb - va : null;
         let cls = "";
         if (dv != null && dv !== 0) cls = (better === "low" ? dv < 0 : dv > 0) ? "delta-up" : "delta-down";
@@ -768,16 +767,17 @@ async function viewCompare(view) {
 
         const tokA = A.sub.total_tokens,
             tokB = B.sub.total_tokens;
+        const ascendCmp = isAscend(A.sub.problem_key || A.inst?.problem_key);
 
         document.getElementById("cp-body").innerHTML = `
       ${!sameProblem ? `<div class="card"><div class="error-banner">⚠️ 两次提交分属不同问题（${esc(state.problemMap.get(pkA)?.name || pkA || "?")} vs ${esc(state.problemMap.get(pkB)?.name || pkB || "?")}），适应度不可直接比较，仅对比进化过程。</div></div>` : ""}
       <div class="vs-grid">${infoCard("a", A)}<div class="vs-mid">VS</div>${infoCard("b", B)}</div>
       <div class="card">
         <h2>关键指标对比 <span class="tail">左 A · 中差值（绿色=B 更优）· 右 B</span></h2>
-        ${deltaRow("适应度", A.sub.objective, B.sub.objective, fmtObj, "low")}
-        ${deltaRow("所耗 token", tokA, tokB, fmtTokens, "low")}
-        ${deltaRow("进化代数", A.gens.length, B.gens.length, v => String(v ?? "—"), "low")}
-        ${deltaRow("种群个体总数", A.gens.reduce((a, g) => a + (g.heuristics?.length ?? 0), 0), B.gens.reduce((a, g) => a + (g.heuristics?.length ?? 0), 0), v => String(v ?? "—"), "low")}
+        ${deltaRow("适应度", A.sub.objective, B.sub.objective, fmtObj, "low", ascendCmp)}
+        ${deltaRow("所耗 token", tokA, tokB, fmtTokens, "low", ascendCmp)}
+        ${deltaRow("进化代数", A.gens.length, B.gens.length, v => String(v ?? "—"), "low", ascendCmp)}
+        ${deltaRow("种群个体总数", A.gens.reduce((a, g) => a + (g.heuristics?.length ?? 0), 0), B.gens.reduce((a, g) => a + (g.heuristics?.length ?? 0), 0), v => String(v ?? "—"), "low", ascendCmp)}
       </div>
       <div class="card"><h2>进化提升率对比</h2>
         <div class="legend"><span><span class="dot" style="background:#22d3ee"></span>提交 A</span><span><span class="dot" style="background:#f472b6"></span>提交 B</span></div>
