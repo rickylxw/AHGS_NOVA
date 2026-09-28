@@ -1433,3 +1433,13 @@ details.tier summary:hover { background: var(--row-hover); }
 .tier-dir, .tier-meta { font-size: 11.5px; color: var(--text-faint); }
 .tier-dim { opacity: .55; }
 details.tier.tier-dim .tier-count { background: var(--border-strong); color: var(--text-dim); }
+
+/* 胶囊按钮渐变（同亮度双色，圆角两端不发灰） */
+:root, [data-theme="dark"] { --pill-grad: linear-gradient(135deg, #22d3ee, #818cf8); }
+[data-theme="light"] { --pill-grad: linear-gradient(135deg, #06b6d4, #6366f1); }
+.chip.on {
+  background: var(--pill-grad);
+}
+.btn.primary, .btn-login {
+  background: var(--pill-grad);
+}
