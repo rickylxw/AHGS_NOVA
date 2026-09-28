@@ -540,7 +540,8 @@ async function viewEvo(view, params) {
         try {
             collectCfg();
         } catch (e) {
-            /* 高级参数 JSON 不完整时仍允许保存 */ }
+            /* 高级参数 JSON 不完整时仍允许保存 */
+        }
         const btn = $("evm-saveinst");
         btn.disabled = true;
         try {

@@ -1325,15 +1325,39 @@ th.num {
 }
 
 /* ============ 滚动条（跟随主题，避免默认白色突兀） ============ */
-:root, [data-theme="dark"] { color-scheme: dark; }
-[data-theme="light"] { color-scheme: light; }
-* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 999px;
-  border: 2px solid var(--bg);
+:root,
+[data-theme="dark"] {
+    color-scheme: dark;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
-::-webkit-scrollbar-corner { background: transparent; }
+
+[data-theme="light"] {
+    color-scheme: light;
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 999px;
+    border: 2px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-faint);
+}
+
+::-webkit-scrollbar-corner {
+    background: transparent;
+}

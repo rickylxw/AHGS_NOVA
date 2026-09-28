@@ -2,26 +2,22 @@
 "use strict";
 
 const FW_CHIPS = [{
-        key: "ahg",
-        label: "AHG 全部",
-        types: ["eoh_nseh", "calm"]
-    },
-    {
-        key: "eoh_nseh",
-        label: "EoH(NSEH)",
-        types: ["eoh_nseh"]
-    },
-    {
-        key: "calm",
-        label: "CALM",
-        types: ["calm"]
-    },
-    {
-        key: "custom",
-        label: "自定义",
-        types: ["custom"]
-    },
-];
+    key: "ahg",
+    label: "AHG 全部",
+    types: ["eoh_nseh", "calm"]
+}, {
+    key: "eoh_nseh",
+    label: "EoH(NSEH)",
+    types: ["eoh_nseh"]
+}, {
+    key: "calm",
+    label: "CALM",
+    types: ["calm"]
+}, {
+    key: "custom",
+    label: "自定义",
+    types: ["custom"]
+}, ];
 const SRC_CHIPS = [{
     key: "api",
     label: "API"
@@ -139,16 +135,14 @@ const DashboardView = {
             })));
         });
         const srcDonut = computed(() => donutSVG([{
-                label: "API 模型",
-                value: recent.value.filter(s => s.model_source === "api").length,
-                color: "#fbbf24"
-            },
-            {
-                label: "本地 LLM",
-                value: recent.value.filter(s => s.model_source === "local").length,
-                color: "#22d3ee"
-            },
-        ]));
+            label: "API 模型",
+            value: recent.value.filter(s => s.model_source === "api").length,
+            color: "#fbbf24"
+        }, {
+            label: "本地 LLM",
+            value: recent.value.filter(s => s.model_source === "local").length,
+            color: "#22d3ee"
+        }, ]));
         const fwDonut = computed(() => donutSVG(["eoh_nseh", "calm", "custom"].map((ft, i) => ({
             label: FW_LABEL[ft],
             value: recent.value.filter(s => s.framework_type === ft).length,

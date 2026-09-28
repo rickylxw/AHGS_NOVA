@@ -6,9 +6,14 @@
    - submission: /api/submissions/{id} + /record（静态、含每代个体明细）
    图表与明细两种来源共用。路由名保持 curve，兼容旧链接 #/curve?id=xx */
 const AnalysisView = {
-  components: { EmptyState, FwBadge, SrcBadge, Avatar },
-  props: ["params"],
-  template: `
+    components: {
+        EmptyState,
+        FwBadge,
+        SrcBadge,
+        Avatar
+    },
+    props: ["params"],
+    template: `
   <div>
     <div class="card">
       <h2>进化分析 <span class="tail">Run = 一次进化（实时监控）；提交 = 一次最优上报（含种群明细）</span></h2>
@@ -224,235 +229,494 @@ const AnalysisView = {
       </template>
     </template>
   </div>`,
-  props: ["params"],
-  setup(props) {
-    const runs = ref([]), mySubs = ref([]), recent = ref([]);
-    const runSel = ref(""), mineSel = ref(""), recentSel = ref("");
-    const manualType = ref("submission"), manualId = ref("");
-    const source = ref(null);           // {type:'run'|'submission', id}
-    const state = ref("idle"), loadErr = ref(""), err401 = ref(false);
+    props: ["params"],
+    setup(props) {
+        const runs = ref([]),
+            mySubs = ref([]),
+            recent = ref([]);
+        const runSel = ref(""),
+            mineSel = ref(""),
+            recentSel = ref("");
+        const manualType = ref("submission"),
+            manualId = ref("");
+        const source = ref(null); // {type:'run'|'submission', id}
+        const state = ref("idle"),
+            loadErr = ref(""),
+            err401 = ref(false);
 
-    // run 模式
-    const status = ref({}), results = ref(null), pop = ref(null);
-    const ctrlBusy = ref(false), ctrlErr = ref("");
-    const promptOpen = ref(false), promptText = ref(""), promptIsCode = ref(false), promptState = ref("");
-    const monitorKeyOverride = ref(null);
-    let pollTimer = null;
+        // run 模式
+        const status = ref({}),
+            results = ref(null),
+            pop = ref(null);
+        const ctrlBusy = ref(false),
+            ctrlErr = ref("");
+        const promptOpen = ref(false),
+            promptText = ref(""),
+            promptIsCode = ref(false),
+            promptState = ref("");
+        const monitorKeyOverride = ref(null);
+        let pollTimer = null;
 
-    // submission 模式
-    const rec = ref(null);
+        // submission 模式
+        const rec = ref(null);
 
-    onMounted(async () => {
-      runs.value = await api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []);
-      mySubs.value = getToken() ? await api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []) : [];
-      recent.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
-      const runP = props.params.get("run"), idP = props.params.get("id");
-      if (runP) { source.value = { type: "run", id: Number(runP) }; runSel.value = runP; loadRun(); }
-      else if (idP) { source.value = { type: "submission", id: idP }; loadSubmission(idP); }
-    });
-    onUnmounted(() => { if (pollTimer) clearInterval(pollTimer); });
+        onMounted(async () => {
+            runs.value = await api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []);
+            mySubs.value = getToken() ? await api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []) : [];
+            recent.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
+            const runP = props.params.get("run"),
+                idP = props.params.get("id");
+            if (runP) {
+                source.value = {
+                    type: "run",
+                    id: Number(runP)
+                };
+                runSel.value = runP;
+                loadRun();
+            } else if (idP) {
+                source.value = {
+                    type: "submission",
+                    id: idP
+                };
+                loadSubmission(idP);
+            }
+        });
+        onUnmounted(() => {
+            if (pollTimer) clearInterval(pollTimer);
+        });
 
-    function pickRun() { if (runSel.value) { mineSel.value = recentSel.value = ""; loadSource("run", Number(runSel.value)); } }
-    function pickMine() { if (mineSel.value) { runSel.value = recentSel.value = ""; loadSource("submission", mineSel.value); } }
-    function pickRecent() { if (recentSel.value) { runSel.value = mineSel.value = ""; loadSource("submission", recentSel.value); } }
-    function goManual() {
-      const id = String(manualId.value).trim();
-      if (!id) { toast("请输入 ID", "err"); return; }
-      runSel.value = mineSel.value = recentSel.value = "";
-      loadSource(manualType.value, manualType.value === "run" ? Number(id) : id);
-    }
-    function loadSource(type, id) {
-      source.value = { type, id };
-      state.value = "loading"; loadErr.value = ""; err401.value = false;
-      results.value = null; pop.value = null; rec.value = null; status.value = {};
-      try { history.replaceState(null, "", type === "run" ? `#/curve?run=${id}` : `#/curve?id=${id}`); } catch {}
-      if (type === "run") loadRun(); else loadSubmission(id);
-    }
+        function pickRun() {
+            if (runSel.value) {
+                mineSel.value = recentSel.value = "";
+                loadSource("run", Number(runSel.value));
+            }
+        }
 
-    /* ---------- run 模式 ---------- */
-    const runProblemKey = computed(() => {
-      const fromList = runs.value.find(r => r.run_id === source.value?.id)?.problem_key;
-      return monitorKeyOverride.value ?? fromList ?? null;
-    });
-    async function loadRun() {
-      try {
-        status.value = await api(`/api/evolution/${source.value.id}/status`);
-        await loadRunResults();
-        state.value = "done";
-        if (pollTimer) clearInterval(pollTimer);
-        pollTimer = setInterval(async () => {
-          if (!source.value || source.value.type !== "run") return;
-          try {
-            const st = await api(`/api/evolution/${source.value.id}/status`);
-            status.value = st;
-            await loadRunResults();
-            if (!STATUS_ACTIVE.has(st.status) && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-          } catch {}
-        }, 3000);
-      } catch (e) {
-        state.value = "idle"; loadErr.value = e.message; err401.value = e.status === 401;
-      }
-    }
-    async function loadRunResults() {
-      try { results.value = await api(`/api/evolution/${source.value.id}/results`); } catch {}
-      try { pop.value = await api(`/api/evolution/${source.value.id}/population`); } catch {}
-    }
-    const resultsLoaded = computed(() => !!results.value);
-    const history = computed(() => results.value?.history ?? []);
-    const lastHistory = computed(() => history.value.at(-1) ?? {});
-    const hasVariance = computed(() => history.value.some(h => h.variance != null));
-    const bestHeur = computed(() => results.value?.best_heuristic ?? null);
-    const top3 = computed(() => lastHistory.value.top3 ?? []);
-    const tokenHistory = computed(() => results.value?.token_history ?? []);
-    const lastTok = computed(() => tokenHistory.value.at(-1) ?? {});
-    const popAsc = computed(() => isAscend(runProblemKey.value));
-    const popHeurs = computed(() => (pop.value?.heuristics ?? []).slice().sort((a, b) => {
-      const x = Number(a?.objective), y = Number(b?.objective);
-      if (!isFinite(x) && !isFinite(y)) return 0;
-      if (!isFinite(x)) return 1;
-      if (!isFinite(y)) return -1;
-      return popAsc.value ? x - y : y - x;
-    }));
-    const popBest = computed(() => {
-      const objs = popHeurs.value.map(h => Number(h?.objective)).filter(isFinite);
-      return objs.length ? (popAsc.value ? Math.min(...objs) : Math.max(...objs)) : null;
-    });
-    const popChart = computed(() => barChartSVG(popHeurs.value.map((h, i) => ({ label: String(i + 1), value: Number(h?.objective ?? 0), tip: h?.concept || `个体 ${i + 1}` })), { height: 140 }));
-    const top3Chart = computed(() => barChartSVG(top3.value.map((t, i) => ({ label: "#" + (i + 1), value: Number(t.objective), tip: t.concept || `#${i + 1}` }))));
-    const histChart = computed(() => lineChartSVG([
-      { name: "最优", color: "#22d3ee", points: history.value.map((h, i) => ({ x: h.generation ?? i, y: h.best_objective, label: "第 " + (h.generation ?? i) + " 代" })).filter(p => p.y != null) },
-      { name: "均值", color: "#a78bfa", points: history.value.map((h, i) => ({ x: h.generation ?? i, y: h.avg_objective, label: "第 " + (h.generation ?? i) + " 代" })).filter(p => p.y != null) },
-      { name: "方差", color: "#fb7185", dashed: true, points: hasVariance.value ? history.value.map((h, i) => ({ x: h.generation ?? i, y: h.variance, label: "第 " + (h.generation ?? i) + " 代" })).filter(p => p.y != null) : [] },
-    ], { yLabel: "适应度", xFormat: x => "第" + Math.round(x) + "代" }));
-    const tokDeltaChart = computed(() => barChartSVG(tokenHistory.value.map((t, i) => ({
-      label: String(t.generation ?? i), value: Math.max(0, (t.total_tokens ?? 0) - (i > 0 ? tokenHistory.value[i - 1].total_tokens ?? 0 : 0)), tip: `第 ${t.generation ?? i} 代消耗`,
-    }))));
-    const isActive = computed(() => STATUS_ACTIVE.has(status.value.status));
-    async function ctrl(action) {
-      if (!source.value) return;
-      ctrlErr.value = ""; ctrlBusy.value = true;
-      try {
-        await api(`/api/evolution/${source.value.id}/${action}`, { method: "POST" });
-        toast({ stop: "已停止", pause: "已暂停", resume: "已继续", submit: "当前最优已提交到排行榜" }[action] ?? "操作成功", "ok");
-        try { status.value = await api(`/api/evolution/${source.value.id}/status`); } catch {}
-        loadRunResults();
-      } catch (e) {
-        ctrlErr.value = (action === "submit" ? "提交失败：" : "操作失败：") + e.message;
-        toast(ctrlErr.value, "err");
-      }
-      finally { ctrlBusy.value = false; }
-    }
-    async function saveInstance() {
-      ctrlErr.value = ""; ctrlBusy.value = true;
-      try {
-        const snapshot = pop.value?.heuristics ? [{
-          generation: pop.value.generation ?? 0,
-          heuristics: (pop.value.heuristics ?? []).map(h => ({ concept: h.concept, algorithm: h.algorithm, features: h.features ?? [], objective: h.objective == null || h.objective === Infinity ? null : h.objective })),
-          memory: pop.value.memory ?? { positive_features: [], negative_features: [] },
-        }] : [];
-        const name = `实例_${runProblemKey.value ?? "unknown"}_${new Date().toLocaleString("zh-CN").replace(/[/: ]/g, "-")}`;
-        await api("/api/instances", { method: "POST", body: { name, framework_type: "custom", problem_key: runProblemKey.value, config: { note: "从进化分析页保存" }, run_id: source.value.id, population_snapshot: snapshot } });
-        toast(`实例已保存：${name}`, "ok");
-      } catch (e) { ctrlErr.value = e.message; }
-      finally { ctrlBusy.value = false; }
-    }
-    watch(promptOpen, async open => {
-      if (!open || !source.value) return;
-      promptState.value = "";
-      try {
-        const p = await api(`/api/evolution/${source.value.id}/prompt`);
-        promptIsCode.value = p.framework_code != null;
-        promptText.value = promptIsCode.value ? p.framework_code : JSON.stringify(p.components ?? {}, null, 2);
-      } catch (e) { promptText.value = "加载失败：" + e.message; }
-    });
-    async function savePrompt() {
-      try {
-        const body = promptIsCode.value ? { framework_code: promptText.value } : { components: JSON.parse(promptText.value) };
-        await api(`/api/evolution/${source.value.id}/prompt`, { method: "POST", body });
-        promptState.value = "✔ 已保存";
-        toast("提示词已保存", "ok");
-      } catch (e) { promptState.value = "✘ " + e.message; }
-    }
-    function showHeur(h, i) {
-      store.drawer = { comp: "heur-detail", props: { h, gen: pop.value?.generation ?? "?", idx: i } };
-    }
+        function pickMine() {
+            if (mineSel.value) {
+                runSel.value = recentSel.value = "";
+                loadSource("submission", mineSel.value);
+            }
+        }
 
-    /* ---------- submission 模式 ---------- */
-    const inst = computed(() => rec.value?.instance ?? null);
-    const sub = computed(() => rec.value?.submission ?? {});
-    const cfg = computed(() => inst.value?.config ?? {});
-    const asc = computed(() => cfg.value.ascend !== false);
-    const gens = computed(() => ((inst.value?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)));
-    const genStats = computed(() => gens.value.map(g => {
-      const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
-      return {
-        n: objs.length,
-        best: objs.length ? (asc.value ? Math.min(...objs) : Math.max(...objs)) : null,
-        avg: objs.length ? objs.reduce((a, b) => a + b, 0) / objs.length : null,
-        worst: objs.length ? (asc.value ? Math.max(...objs) : Math.min(...objs)) : null,
-        tok: tokOf(g.token_usage),
-      };
-    }));
-    function tokOf(t) {
-      if (t == null) return null;
-      if (typeof t === "number") return t;
-      if (typeof t === "object") return t.total_tokens ?? t.total ?? t.tokens ?? null;
-      return null;
-    }
-    const gensWithHeurs = computed(() => gens.value.map((g, gi) => ({
-      ...g,
-      sorted: (g.heuristics ?? []).slice().sort((a, b) => {
-        const x = Number(a?.objective), y = Number(b?.objective);
-        if (!isFinite(x) && !isFinite(y)) return 0;
-        if (!isFinite(x)) return 1;
-        if (!isFinite(y)) return -1;
-        return asc.value ? x - y : y - x;
-      }),
-    })));
-    const bestPts = computed(() => genStats.value.map((s, i) => ({ x: gens.value[i].generation ?? i, y: s.best, label: "第 " + (gens.value[i].generation ?? i) + " 代" })).filter(p => p.y != null));
-    const avgPts = computed(() => genStats.value.map((s, i) => ({ x: gens.value[i].generation ?? i, y: s.avg, label: "第 " + (gens.value[i].generation ?? i) + " 代" })).filter(p => p.y != null));
-    const mainChart = computed(() => lineChartSVG([
-      { name: "每代最优", color: "#22d3ee", points: bestPts.value },
-      { name: "每代平均", color: "#a78bfa", dashed: true, points: avgPts.value },
-    ], { yLabel: "适应度" }));
-    const heurCount = computed(() => genStats.value.reduce((a, s) => a + s.n, 0));
-    const firstBest = computed(() => bestPts.value[0]?.y ?? null);
-    const finalBest = computed(() => bestPts.value.at(-1)?.y ?? null);
-    const improve = computed(() => {
-      const f = firstBest.value, l = finalBest.value;
-      if (f == null || l == null || f === 0) return null;
-      return (asc.value ? (f - l) / Math.abs(f) : (l - f) / Math.abs(f)) * 100;
-    });
-    const anyTok = computed(() => genStats.value.some(s => s.tok != null));
-    const tokTotal = computed(() => genStats.value.reduce((a, s) => a + (s.tok ?? 0), 0));
-    const tokSeries = computed(() => genStats.value.map((s, i) => ({ label: String(gens.value[i].generation ?? i), value: s.tok ?? 0, tip: "第 " + (gens.value[i].generation ?? i) + " 代" })));
-    const tokChart = computed(() => barChartSVG(tokSeries.value));
-    const subObjective = computed(() => sub.value.objective ?? finalBest.value);
-    const customCode = computed(() => inst.value?.framework_type === "custom" ? (cfg.value.framework_code ?? "") : "");
-    const bestInd = computed(() => {
-      const last = gensWithHeurs.value.at(-1);
-      return last?.sorted?.[0] ? { ...last.sorted[0], generation: last.generation } : null;
-    });
-    async function loadSubmission(id) {
-      try {
-        rec.value = await api(`/api/submissions/${id}/record`);
-        state.value = "done";
-      } catch (e) {
-        state.value = "idle"; loadErr.value = e.message; err401.value = e.status === 401;
-      }
-    }
-    const problemLabel = computed(() => {
-      if (source.value?.type === "run") return runProblemKey.value ?? "—";
-      const pk = sub.value.problem_key || inst.value?.problem_key;
-      return (store.problems.find(p => p.key === pk) || {}).name || pk || "—";
-    });
+        function pickRecent() {
+            if (recentSel.value) {
+                runSel.value = mineSel.value = "";
+                loadSource("submission", recentSel.value);
+            }
+        }
 
-    return { store, getToken, runs, mySubs, recent, runSel, mineSel, recentSel, manualType, manualId, source, state, loadErr, err401, pickRun, pickMine, pickRecent, goManual,
-      status, results, resultsLoaded, pop, ctrlBusy, ctrlErr, promptOpen, promptText, promptIsCode, promptState, ctrl, saveInstance, savePrompt, showHeur,
-      history, lastHistory, hasVariance, bestHeur, top3, tokenHistory, lastTok, popHeurs, popBest, popChart, top3Chart, histChart, tokDeltaChart, isActive,
-      rec, inst, sub, cfg, asc, gens, genStats, gensWithHeurs, mainChart, heurCount, firstBest, improve, anyTok, tokTotal, tokSeries, tokChart, subObjective, customCode, bestInd,
-      problemLabel, isRunMode: computed(() => source.value?.type === "run"), popAsc,
-      statusName: s => STATUS_LABEL[s] ?? s ?? "—", fmtObj, fmtTokens, fmtTime, fullName, copyText };
-  },
+        function goManual() {
+            const id = String(manualId.value).trim();
+            if (!id) {
+                toast("请输入 ID", "err");
+                return;
+            }
+            runSel.value = mineSel.value = recentSel.value = "";
+            loadSource(manualType.value, manualType.value === "run" ? Number(id) : id);
+        }
+
+        function loadSource(type, id) {
+            source.value = {
+                type,
+                id
+            };
+            state.value = "loading";
+            loadErr.value = "";
+            err401.value = false;
+            results.value = null;
+            pop.value = null;
+            rec.value = null;
+            status.value = {};
+            try {
+                history.replaceState(null, "", type === "run" ? `#/curve?run=${id}` : `#/curve?id=${id}`);
+            } catch {}
+            if (type === "run") loadRun();
+            else loadSubmission(id);
+        }
+
+        /* ---------- run 模式 ---------- */
+        const runProblemKey = computed(() => {
+            const fromList = runs.value.find(r => r.run_id === source.value?.id)?.problem_key;
+            return monitorKeyOverride.value ?? fromList ?? null;
+        });
+        async function loadRun() {
+            try {
+                status.value = await api(`/api/evolution/${source.value.id}/status`);
+                await loadRunResults();
+                state.value = "done";
+                if (pollTimer) clearInterval(pollTimer);
+                pollTimer = setInterval(async () => {
+                    if (!source.value || source.value.type !== "run") return;
+                    try {
+                        const st = await api(`/api/evolution/${source.value.id}/status`);
+                        status.value = st;
+                        await loadRunResults();
+                        if (!STATUS_ACTIVE.has(st.status) && pollTimer) {
+                            clearInterval(pollTimer);
+                            pollTimer = null;
+                        }
+                    } catch {}
+                }, 3000);
+            } catch (e) {
+                state.value = "idle";
+                loadErr.value = e.message;
+                err401.value = e.status === 401;
+            }
+        }
+        async function loadRunResults() {
+            try {
+                results.value = await api(`/api/evolution/${source.value.id}/results`);
+            } catch {}
+            try {
+                pop.value = await api(`/api/evolution/${source.value.id}/population`);
+            } catch {}
+        }
+        const resultsLoaded = computed(() => !!results.value);
+        const history = computed(() => results.value?.history ?? []);
+        const lastHistory = computed(() => history.value.at(-1) ?? {});
+        const hasVariance = computed(() => history.value.some(h => h.variance != null));
+        const bestHeur = computed(() => results.value?.best_heuristic ?? null);
+        const top3 = computed(() => lastHistory.value.top3 ?? []);
+        const tokenHistory = computed(() => results.value?.token_history ?? []);
+        const lastTok = computed(() => tokenHistory.value.at(-1) ?? {});
+        const popAsc = computed(() => isAscend(runProblemKey.value));
+        const popHeurs = computed(() => (pop.value?.heuristics ?? []).slice().sort((a, b) => {
+            const x = Number(a?.objective),
+                y = Number(b?.objective);
+            if (!isFinite(x) && !isFinite(y)) return 0;
+            if (!isFinite(x)) return 1;
+            if (!isFinite(y)) return -1;
+            return popAsc.value ? x - y : y - x;
+        }));
+        const popBest = computed(() => {
+            const objs = popHeurs.value.map(h => Number(h?.objective)).filter(isFinite);
+            return objs.length ? (popAsc.value ? Math.min(...objs) : Math.max(...objs)) : null;
+        });
+        const popChart = computed(() => barChartSVG(popHeurs.value.map((h, i) => ({
+            label: String(i + 1),
+            value: Number(h?.objective ?? 0),
+            tip: h?.concept || `个体 ${i + 1}`
+        })), {
+            height: 140
+        }));
+        const top3Chart = computed(() => barChartSVG(top3.value.map((t, i) => ({
+            label: "#" + (i + 1),
+            value: Number(t.objective),
+            tip: t.concept || `#${i + 1}`
+        }))));
+        const histChart = computed(() => lineChartSVG([{
+            name: "最优",
+            color: "#22d3ee",
+            points: history.value.map((h, i) => ({
+                x: h.generation ?? i,
+                y: h.best_objective,
+                label: "第 " + (h.generation ?? i) + " 代"
+            })).filter(p => p.y != null)
+        }, {
+            name: "均值",
+            color: "#a78bfa",
+            points: history.value.map((h, i) => ({
+                x: h.generation ?? i,
+                y: h.avg_objective,
+                label: "第 " + (h.generation ?? i) + " 代"
+            })).filter(p => p.y != null)
+        }, {
+            name: "方差",
+            color: "#fb7185",
+            dashed: true,
+            points: hasVariance.value ? history.value.map((h, i) => ({
+                x: h.generation ?? i,
+                y: h.variance,
+                label: "第 " + (h.generation ?? i) + " 代"
+            })).filter(p => p.y != null) : []
+        }, ], {
+            yLabel: "适应度",
+            xFormat: x => "第" + Math.round(x) + "代"
+        }));
+        const tokDeltaChart = computed(() => barChartSVG(tokenHistory.value.map((t, i) => ({
+            label: String(t.generation ?? i),
+            value: Math.max(0, (t.total_tokens ?? 0) - (i > 0 ? tokenHistory.value[i - 1].total_tokens ?? 0 : 0)),
+            tip: `第 ${t.generation ?? i} 代消耗`,
+        }))));
+        const isActive = computed(() => STATUS_ACTIVE.has(status.value.status));
+        async function ctrl(action) {
+            if (!source.value) return;
+            ctrlErr.value = "";
+            ctrlBusy.value = true;
+            try {
+                await api(`/api/evolution/${source.value.id}/${action}`, {
+                    method: "POST"
+                });
+                toast({
+                    stop: "已停止",
+                    pause: "已暂停",
+                    resume: "已继续",
+                    submit: "当前最优已提交到排行榜"
+                } [action] ?? "操作成功", "ok");
+                try {
+                    status.value = await api(`/api/evolution/${source.value.id}/status`);
+                } catch {}
+                loadRunResults();
+            } catch (e) {
+                ctrlErr.value = (action === "submit" ? "提交失败：" : "操作失败：") + e.message;
+                toast(ctrlErr.value, "err");
+            } finally {
+                ctrlBusy.value = false;
+            }
+        }
+        async function saveInstance() {
+            ctrlErr.value = "";
+            ctrlBusy.value = true;
+            try {
+                const snapshot = pop.value?.heuristics ? [{
+                    generation: pop.value.generation ?? 0,
+                    heuristics: (pop.value.heuristics ?? []).map(h => ({
+                        concept: h.concept,
+                        algorithm: h.algorithm,
+                        features: h.features ?? [],
+                        objective: h.objective == null || h.objective === Infinity ? null : h.objective
+                    })),
+                    memory: pop.value.memory ?? {
+                        positive_features: [],
+                        negative_features: []
+                    },
+                }] : [];
+                const name = `实例_${runProblemKey.value ?? "unknown"}_${new Date().toLocaleString("zh-CN").replace(/[/: ]/g, "-")}`;
+                await api("/api/instances", {
+                    method: "POST",
+                    body: {
+                        name,
+                        framework_type: "custom",
+                        problem_key: runProblemKey.value,
+                        config: {
+                            note: "从进化分析页保存"
+                        },
+                        run_id: source.value.id,
+                        population_snapshot: snapshot
+                    }
+                });
+                toast(`实例已保存：${name}`, "ok");
+            } catch (e) {
+                ctrlErr.value = e.message;
+            } finally {
+                ctrlBusy.value = false;
+            }
+        }
+        watch(promptOpen, async open => {
+            if (!open || !source.value) return;
+            promptState.value = "";
+            try {
+                const p = await api(`/api/evolution/${source.value.id}/prompt`);
+                promptIsCode.value = p.framework_code != null;
+                promptText.value = promptIsCode.value ? p.framework_code : JSON.stringify(p.components ?? {}, null, 2);
+            } catch (e) {
+                promptText.value = "加载失败：" + e.message;
+            }
+        });
+        async function savePrompt() {
+            try {
+                const body = promptIsCode.value ? {
+                    framework_code: promptText.value
+                } : {
+                    components: JSON.parse(promptText.value)
+                };
+                await api(`/api/evolution/${source.value.id}/prompt`, {
+                    method: "POST",
+                    body
+                });
+                promptState.value = "✔ 已保存";
+                toast("提示词已保存", "ok");
+            } catch (e) {
+                promptState.value = "✘ " + e.message;
+            }
+        }
+
+        function showHeur(h, i) {
+            store.drawer = {
+                comp: "heur-detail",
+                props: {
+                    h,
+                    gen: pop.value?.generation ?? "?",
+                    idx: i
+                }
+            };
+        }
+
+        /* ---------- submission 模式 ---------- */
+        const inst = computed(() => rec.value?.instance ?? null);
+        const sub = computed(() => rec.value?.submission ?? {});
+        const cfg = computed(() => inst.value?.config ?? {});
+        const asc = computed(() => cfg.value.ascend !== false);
+        const gens = computed(() => ((inst.value?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)));
+        const genStats = computed(() => gens.value.map(g => {
+            const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
+            return {
+                n: objs.length,
+                best: objs.length ? (asc.value ? Math.min(...objs) : Math.max(...objs)) : null,
+                avg: objs.length ? objs.reduce((a, b) => a + b, 0) / objs.length : null,
+                worst: objs.length ? (asc.value ? Math.max(...objs) : Math.min(...objs)) : null,
+                tok: tokOf(g.token_usage),
+            };
+        }));
+
+        function tokOf(t) {
+            if (t == null) return null;
+            if (typeof t === "number") return t;
+            if (typeof t === "object") return t.total_tokens ?? t.total ?? t.tokens ?? null;
+            return null;
+        }
+        const gensWithHeurs = computed(() => gens.value.map((g, gi) => ({
+            ...g,
+            sorted: (g.heuristics ?? []).slice().sort((a, b) => {
+                const x = Number(a?.objective),
+                    y = Number(b?.objective);
+                if (!isFinite(x) && !isFinite(y)) return 0;
+                if (!isFinite(x)) return 1;
+                if (!isFinite(y)) return -1;
+                return asc.value ? x - y : y - x;
+            }),
+        })));
+        const bestPts = computed(() => genStats.value.map((s, i) => ({
+            x: gens.value[i].generation ?? i,
+            y: s.best,
+            label: "第 " + (gens.value[i].generation ?? i) + " 代"
+        })).filter(p => p.y != null));
+        const avgPts = computed(() => genStats.value.map((s, i) => ({
+            x: gens.value[i].generation ?? i,
+            y: s.avg,
+            label: "第 " + (gens.value[i].generation ?? i) + " 代"
+        })).filter(p => p.y != null));
+        const mainChart = computed(() => lineChartSVG([{
+            name: "每代最优",
+            color: "#22d3ee",
+            points: bestPts.value
+        }, {
+            name: "每代平均",
+            color: "#a78bfa",
+            dashed: true,
+            points: avgPts.value
+        }, ], {
+            yLabel: "适应度"
+        }));
+        const heurCount = computed(() => genStats.value.reduce((a, s) => a + s.n, 0));
+        const firstBest = computed(() => bestPts.value[0]?.y ?? null);
+        const finalBest = computed(() => bestPts.value.at(-1)?.y ?? null);
+        const improve = computed(() => {
+            const f = firstBest.value,
+                l = finalBest.value;
+            if (f == null || l == null || f === 0) return null;
+            return (asc.value ? (f - l) / Math.abs(f) : (l - f) / Math.abs(f)) * 100;
+        });
+        const anyTok = computed(() => genStats.value.some(s => s.tok != null));
+        const tokTotal = computed(() => genStats.value.reduce((a, s) => a + (s.tok ?? 0), 0));
+        const tokSeries = computed(() => genStats.value.map((s, i) => ({
+            label: String(gens.value[i].generation ?? i),
+            value: s.tok ?? 0,
+            tip: "第 " + (gens.value[i].generation ?? i) + " 代"
+        })));
+        const tokChart = computed(() => barChartSVG(tokSeries.value));
+        const subObjective = computed(() => sub.value.objective ?? finalBest.value);
+        const customCode = computed(() => inst.value?.framework_type === "custom" ? (cfg.value.framework_code ?? "") : "");
+        const bestInd = computed(() => {
+            const last = gensWithHeurs.value.at(-1);
+            return last?.sorted?.[0] ? {
+                ...last.sorted[0],
+                generation: last.generation
+            } : null;
+        });
+        async function loadSubmission(id) {
+            try {
+                rec.value = await api(`/api/submissions/${id}/record`);
+                state.value = "done";
+            } catch (e) {
+                state.value = "idle";
+                loadErr.value = e.message;
+                err401.value = e.status === 401;
+            }
+        }
+        const problemLabel = computed(() => {
+            if (source.value?.type === "run") return runProblemKey.value ?? "—";
+            const pk = sub.value.problem_key || inst.value?.problem_key;
+            return (store.problems.find(p => p.key === pk) || {}).name || pk || "—";
+        });
+
+        return {
+            store,
+            getToken,
+            runs,
+            mySubs,
+            recent,
+            runSel,
+            mineSel,
+            recentSel,
+            manualType,
+            manualId,
+            source,
+            state,
+            loadErr,
+            err401,
+            pickRun,
+            pickMine,
+            pickRecent,
+            goManual,
+            status,
+            results,
+            resultsLoaded,
+            pop,
+            ctrlBusy,
+            ctrlErr,
+            promptOpen,
+            promptText,
+            promptIsCode,
+            promptState,
+            ctrl,
+            saveInstance,
+            savePrompt,
+            showHeur,
+            history,
+            lastHistory,
+            hasVariance,
+            bestHeur,
+            top3,
+            tokenHistory,
+            lastTok,
+            popHeurs,
+            popBest,
+            popChart,
+            top3Chart,
+            histChart,
+            tokDeltaChart,
+            isActive,
+            rec,
+            inst,
+            sub,
+            cfg,
+            asc,
+            gens,
+            genStats,
+            gensWithHeurs,
+            mainChart,
+            heurCount,
+            firstBest,
+            improve,
+            anyTok,
+            tokTotal,
+            tokSeries,
+            tokChart,
+            subObjective,
+            customCode,
+            bestInd,
+            problemLabel,
+            isRunMode: computed(() => source.value?.type === "run"),
+            popAsc,
+            statusName: s => STATUS_LABEL[s] ?? s ?? "—",
+            fmtObj,
+            fmtTokens,
+            fmtTime,
+            fullName,
+            copyText
+        };
+    },
 };
 ROUTE_COMPS.curve = AnalysisView;

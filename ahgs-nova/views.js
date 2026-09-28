@@ -2,26 +2,22 @@
 "use strict";
 
 const FW_CHIPS = [{
-        key: "ahg",
-        label: "AHG 全部",
-        types: ["eoh_nseh", "calm"]
-    },
-    {
-        key: "eoh_nseh",
-        label: "EoH(NSEH)",
-        types: ["eoh_nseh"]
-    },
-    {
-        key: "calm",
-        label: "CALM",
-        types: ["calm"]
-    },
-    {
-        key: "custom",
-        label: "自定义",
-        types: ["custom"]
-    },
-];
+    key: "ahg",
+    label: "AHG 全部",
+    types: ["eoh_nseh", "calm"]
+}, {
+    key: "eoh_nseh",
+    label: "EoH(NSEH)",
+    types: ["eoh_nseh"]
+}, {
+    key: "calm",
+    label: "CALM",
+    types: ["calm"]
+}, {
+    key: "custom",
+    label: "自定义",
+    types: ["custom"]
+}, ];
 const SRC_CHIPS = [{
     key: "api",
     label: "API"
@@ -91,16 +87,14 @@ async function viewDashboard(view) {
     }
 
     const srcSegs = [{
-            label: "API 模型",
-            value: recent.filter(s => s.model_source === "api").length,
-            color: "#fbbf24"
-        },
-        {
-            label: "本地 LLM",
-            value: recent.filter(s => s.model_source === "local").length,
-            color: "#22d3ee"
-        },
-    ];
+        label: "API 模型",
+        value: recent.filter(s => s.model_source === "api").length,
+        color: "#fbbf24"
+    }, {
+        label: "本地 LLM",
+        value: recent.filter(s => s.model_source === "local").length,
+        color: "#22d3ee"
+    }, ];
     const fwSegs = ["eoh_nseh", "calm", "custom"].map((ft, i) => ({
         label: FW_LABEL[ft],
         value: recent.filter(s => s.framework_type === ft).length,
@@ -760,16 +754,14 @@ async function viewCompare(view) {
         const sa = improveSeries(A),
             sb = improveSeries(B);
         const overlay = lineChartSVG([{
-                name: "A 提升%",
-                color: "#22d3ee",
-                points: sa
-            },
-            {
-                name: "B 提升%",
-                color: "#f472b6",
-                points: sb
-            },
-        ], {
+            name: "A 提升%",
+            color: "#22d3ee",
+            points: sa
+        }, {
+            name: "B 提升%",
+            color: "#f472b6",
+            points: sb
+        }, ], {
             yLabel: "相对首代提升 %",
             xFormat: x => "第" + Math.round(x) + "代"
         });
