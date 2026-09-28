@@ -35,7 +35,7 @@ const EvoView = {
             <input type="number" min="0" v-model.number="cfg[k]"></div>
         </div>
         <div class="field"><label>LLM 预设</label>
-          <select v-model="presetSel" @change="applyPreset">
+          <select v-model="presetSel" @change="onPresetChange">
             <option v-for="p in presets" :key="p.id" :value="p.id">{{ p.name }}（{{ p.provider }}）</option>
             </select></div>
         <template v-if="!cfg.use_local_llm">
@@ -164,23 +164,55 @@ const EvoView = {
             presets.value = await api("/api/llm-presets").then(r => r.presets ?? []).catch(() => []);
             instances.value = await api("/api/instances").then(r => r.instances ?? []).catch(() => []);
             runs.value = await api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []);
-            if (!cfg.preset_id && presets.value.length) cfg.preset_id = presets.value[0].id;
+            // 恢复上次发起的配置（api_key 出于安全不保存）
+            const saved = getSavedCfg();
+            if (saved) {
+                for (const k of Object.keys(saved)) {
+                    if (k in cfg && k !== "api_key" && k !== "framework_id") cfg[k] = saved[k];
+                }
+                funArgsText.value = JSON.stringify(cfg.fun_args ?? []);
+                funRetText.value = JSON.stringify(cfg.fun_return ?? []);
+            }
+            if (!cfg.preset_id || !presets.value.some(x => x.id === cfg.preset_id)) {
+                cfg.preset_id = presets.value[0]?.id ?? "custom";
+            }
             presetSel.value = cfg.preset_id;
+            if (cfg.preset_id !== "custom") {
+                const p = presets.value.find(x => x.id === presetSel.value);
+                if (p && !saved?.llm_base_url) {
+                    cfg.llm_model = p.id;
+                    cfg.llm_base_url = p.base_url;
+                }
+            }
             applyPreset();
             loadProblemDetail();
         });
 
+        function getSavedCfg() {
+            try { return JSON.parse(localStorage.getItem("nova_evo_cfg") || "null"); } catch { return null; }
+        }
+        function persistCfg() {
+            try {
+                const { api_key, framework_id, ...rest } = cfg;
+                localStorage.setItem("nova_evo_cfg", JSON.stringify(rest));
+            } catch {}
+        }
+
         function applyPreset() {
-            if (presetSel.value === "custom") {
-                cfg.llm_model = "";
-                cfg.llm_base_url = "";
-                return;
-            }
+            if (presetSel.value === "custom") return; // 保留当前手填的 Base URL / 模型（含恢复的配置）
             const p = presets.value.find(x => x.id === presetSel.value);
             if (p) {
                 cfg.llm_model = p.id;
                 cfg.llm_base_url = p.base_url;
             }
+        }
+
+        function onPresetChange() {
+            if (presetSel.value === "custom") {
+                cfg.llm_model = "";
+                cfg.llm_base_url = "";
+            }
+            applyPreset();
         }
         async function loadProblemDetail() {
             try {
@@ -368,7 +400,8 @@ const EvoView = {
                     method: "POST",
                     body
                 });
-                createInstanceAtStart(cfg.framework_type, r.run_id);
+                persistCfg();
+            createInstanceAtStart(cfg.framework_type, r.run_id);
                 refreshHistory();
                 toast(`进化已启动（Run #${r.run_id}），正在打开实时监控…`, "ok");
                 navHash("curve", new URLSearchParams({
@@ -420,7 +453,8 @@ const EvoView = {
                         } : {})
                     }
                 });
-                createInstanceAtStart("custom", r.run_id);
+                persistCfg();
+            createInstanceAtStart("custom", r.run_id);
                 refreshHistory();
                 toast(`开发者运行已启动（Run #${r.run_id}），正在打开实时监控…`, "ok");
                 navHash("curve", new URLSearchParams({
@@ -457,6 +491,7 @@ const EvoView = {
             launch,
             devRun,
             applyPreset,
+            onPresetChange,
             loadProblemDetail,
             loadInstance,
             readFwFile,

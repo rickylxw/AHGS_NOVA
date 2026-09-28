@@ -169,7 +169,7 @@ function medalHTML(rank) {
 function avatarHTML(e, extra = "") {
     const name = fullName(e);
     const ch = esc((name[0] || "?").toUpperCase());
-    if (e.avatar) return `<span class="avatar ${extra}"><img src="${esc(e.avatar)}" alt="" referrerpolicy="no-referrer"></span>`;
+    if (e.avatar) return `<span class="avatar ${extra}" data-initial="${ch}"><img src="${esc(e.avatar)}" alt="" referrerpolicy="no-referrer"></span>`;
     return `<span class="avatar ${extra}">${ch}</span>`;
 }
 
@@ -557,6 +557,18 @@ window.addEventListener("hashchange", render);
 async function boot() {
     applyTheme(localStorage.getItem(LS.theme) || "dark");
     renderUserSlot();
+    // 头像图加载失败 → 回退显示首字母
+    document.addEventListener("error", (e) => {
+        const img = e.target;
+        if (img && img.tagName === "IMG" && img.parentElement && img.parentElement.classList.contains("avatar")) {
+            img.style.display = "none";
+            const span = img.parentElement;
+            if (!span.dataset.fallbackDone) {
+                span.dataset.fallbackDone = "1";
+                span.insertAdjacentHTML("beforeend", `<b style="font-weight: 800">${esc(span.dataset.initial || "?")}</b>`);
+            }
+        }
+    }, true);
     document.getElementById("footer-api").textContent = apiBase();
     try {
         const r = await api("/api/problems");

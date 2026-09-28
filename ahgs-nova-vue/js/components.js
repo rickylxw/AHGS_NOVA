@@ -72,9 +72,17 @@ const Avatar = {
             default: 30
         }
     },
+    data() {
+        return {
+            imgErr: false
+        };
+    },
     computed: {
         initial() {
             return (fullName(this.user)[0] || "?").toUpperCase();
+        },
+        showImg() {
+            return this.user && this.user.avatar && !this.imgErr;
         },
         st() {
             return {
@@ -84,7 +92,12 @@ const Avatar = {
             };
         },
     },
-    template: `<span class="avatar" :style="st"><img v-if="user && user.avatar" :src="user.avatar" alt="" referrerpolicy="no-referrer">{{ initial }}</span>`,
+    watch: {
+        "user.avatar"() {
+            this.imgErr = false;
+        },
+    },
+    template: `<span class="avatar" :style="st"><img v-if="showImg" :src="user.avatar" alt="" referrerpolicy="no-referrer" @error="imgErr = true">{{ initial }}</span>`,
 };
 const UserCell = {
     components: {

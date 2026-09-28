@@ -81,6 +81,18 @@ const AnalysisView = {
         </div>
       </div>
 
+      <div v-if="kwInsight" class="card">
+        <h2>关键词洞察 <span class="tail">{{ kwScope }}</span></h2>
+        <p class="hint" style="margin-bottom:8px">统计个体 features 与适应度的相关性：出现该关键词的个体平均适应度相对总体平均的变化（{{ popAsc ? "越小越好" : "越大越好" }}，正值 = 有利）。</p>
+        <div class="field"><label>👍 有利关键词（携带者更优）</label><div class="badge-row">
+          <span v-for="k in kwInsight.good" :key="k.name" class="badge src-local" :title="'出现 ' + k.n + ' 次 · 平均 ' + fmtObj(k.avg) + '（总体 ' + fmtObj(k.overall) + '）· 最好 ' + fmtObj(k.best)">{{ k.name }} ×{{ k.n }}（{{ k.delta > 0 ? "+" : "" }}{{ k.delta.toFixed(1) }}%）</span>
+          <span v-if="!kwInsight.good.length" class="hint">无明显有利关键词</span>
+        </div></div>
+        <div class="field"><label>👎 不利关键词（携带者更差）</label><div class="badge-row">
+          <span v-for="k in kwInsight.bad" :key="k.name" class="badge src-api" :title="'出现 ' + k.n + ' 次 · 平均 ' + fmtObj(k.avg) + '（总体 ' + fmtObj(k.overall) + '）'">{{ k.name }} ×{{ k.n }}（{{ k.delta > 0 ? "+" : "" }}{{ k.delta.toFixed(1) }}%）</span>
+          <span v-if="!kwInsight.bad.length" class="hint">无明显不利关键词</span>
+        </div></div>
+      </div>
       <div v-if="bestHeur" class="card">
         <h2>最优算法 <span class="tail">第 {{ bestHeur.generation ?? "?" }} 代 · 适应度 {{ fmtObj(bestHeur.objective) }}</span></h2>
         <p class="drawer-text" style="margin-bottom:8px">{{ bestHeur.concept || "（无描述）" }}</p>
@@ -180,6 +192,18 @@ const AnalysisView = {
               <span v-for="f in (sub.features ?? [])" :key="f" class="badge feature-badge">{{ f }}</span>
               <span v-if="!(sub.features ?? []).length" class="hint">无</span></div></div>
           </div>
+        </div>
+        <div v-if="kwInsight" class="card">
+          <h2>关键词洞察 <span class="tail">{{ kwScope }}</span></h2>
+          <p class="hint" style="margin-bottom:8px">统计个体 features 与适应度的相关性：出现该关键词的个体平均适应度相对总体平均的变化（{{ asc ? "越小越好" : "越大越好" }}，正值 = 有利）。</p>
+          <div class="field"><label>👍 有利关键词（携带者更优）</label><div class="badge-row">
+            <span v-for="k in kwInsight.good" :key="k.name" class="badge src-local" :title="'出现 ' + k.n + ' 次 · 平均 ' + fmtObj(k.avg) + '（总体 ' + fmtObj(k.overall) + '）· 最好 ' + fmtObj(k.best)">{{ k.name }} ×{{ k.n }}（{{ k.delta > 0 ? "+" : "" }}{{ k.delta.toFixed(1) }}%）</span>
+            <span v-if="!kwInsight.good.length" class="hint">无明显有利关键词</span>
+          </div></div>
+          <div class="field"><label>👎 不利关键词（携带者更差）</label><div class="badge-row">
+            <span v-for="k in kwInsight.bad" :key="k.name" class="badge src-api" :title="'出现 ' + k.n + ' 次 · 平均 ' + fmtObj(k.avg) + '（总体 ' + fmtObj(k.overall) + '）'">{{ k.name }} ×{{ k.n }}（{{ k.delta > 0 ? "+" : "" }}{{ k.delta.toFixed(1) }}%）</span>
+            <span v-if="!kwInsight.bad.length" class="hint">无明显不利关键词</span>
+          </div></div>
         </div>
         <div v-if="bestInd" class="card">
           <h2>最优算法 <span class="tail">第 {{ bestInd.generation ?? "?" }} 代 · 适应度 {{ fmtObj(bestInd.objective) }}</span></h2>
@@ -471,12 +495,16 @@ const AnalysisView = {
             try {
                 const snapshot = pop.value?.heuristics ? [{
                     generation: pop.value.generation ?? 0,
-                    heuristics: (pop.value.heuristics ?? []).map(h => ({
-                        concept: h.concept,
-                        algorithm: h.algorithm,
-                        features: h.features ?? [],
-                        objective: h.objective == null || h.objective === Infinity ? null : h.objective
-                    })),
+                    heuristics: (pop.value.heuristics ?? []).map(h => {
+                        const feats = h.features ?? h.feature ?? [];
+                        return {
+                            concept: h.concept,
+                            algorithm: h.algorithm,
+                            features: feats,
+                            feature: feats,
+                            objective: h.objective == null || h.objective === Infinity ? null : h.objective
+                        };
+                    }),
                     memory: pop.value.memory ?? {
                         positive_features: [],
                         negative_features: []
@@ -548,7 +576,13 @@ const AnalysisView = {
         const sub = computed(() => rec.value?.submission ?? {});
         const cfg = computed(() => inst.value?.config ?? {});
         const asc = computed(() => cfg.value.ascend !== false);
-        const gens = computed(() => ((inst.value?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)));
+        const gens = computed(() => ((inst.value?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)).map(g => ({
+            ...g,
+            heuristics: (g.heuristics ?? []).map(h => ({
+                ...h,
+                features: h.features ?? h.feature ?? [],
+            })),
+        })));
         const genStats = computed(() => gens.value.map(g => {
             const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
             return {
@@ -635,6 +669,65 @@ const AnalysisView = {
                 err401.value = e.status === 401;
             }
         }
+        // ===== 关键词洞察：features 与适应度的相关性 =====
+        const kwIndividuals = computed(() => {
+            if (!source.value) return [];
+            if (source.value.type === "run") {
+                return popHeurs.value.filter(h => h && isFinite(Number(h.objective))).map(h => ({
+                    objective: Number(h.objective),
+                    features: h.features ?? []
+                }));
+            }
+            return gensWithHeurs.value.flatMap(g => g.sorted.filter(h => h && isFinite(Number(h.objective))).map(h => ({
+                objective: Number(h.objective),
+                features: h.features ?? []
+            })));
+        });
+        const kwScope = computed(() => {
+            if (source.value && source.value.type === "run") {
+                return "当前代（第 " + (pop.value ? pop.value.generation : "?") + " 代 · " + kwIndividuals.value.length + " 个个体）";
+            }
+            return "全部 " + gens.value.length + " 代 · " + kwIndividuals.value.length + " 个个体";
+        });
+        const kwInsight = computed(() => {
+            const inds = kwIndividuals.value.filter(x => (x.features ?? []).length > 0);
+            if (inds.length < 3) return null;
+            const overall = inds.reduce((a, x) => a + x.objective, 0) / inds.length;
+            const kwAsc = source.value.type === "run" ? popAsc.value : asc.value;
+            const map = new Map();
+            for (const x of inds) {
+                for (const f of new Set(x.features ?? [])) {
+                    if (!map.has(f)) map.set(f, {
+                        n: 0,
+                        sum: 0,
+                        best: null
+                    });
+                    const e = map.get(f);
+                    e.n += 1;
+                    e.sum += x.objective;
+                    if (e.best == null || (kwAsc ? x.objective < e.best : x.objective > e.best)) e.best = x.objective;
+                }
+            }
+            const entries = [...map.entries()].filter(([name, e]) => e.n >= 2).map(([name, e]) => {
+                const avg = e.sum / e.n;
+                const delta = kwAsc ? (overall - avg) / Math.abs(overall || 1) * 100 : (avg - overall) / Math.abs(overall || 1) * 100;
+                return {
+                    name,
+                    n: e.n,
+                    avg,
+                    best: e.best,
+                    overall,
+                    delta
+                };
+            });
+            const good = entries.filter(e => e.delta >= 5).sort((a, b) => b.delta - a.delta).slice(0, 12);
+            const bad = entries.filter(e => e.delta <= -5).sort((a, b) => a.delta - b.delta).slice(0, 12);
+            return {
+                good,
+                bad
+            };
+        });
+
         const problemLabel = computed(() => {
             if (source.value?.type === "run") return runProblemKey.value ?? "—";
             const pk = sub.value.problem_key || inst.value?.problem_key;
@@ -683,6 +776,9 @@ const AnalysisView = {
             lastTok,
             popHeurs,
             popBest,
+            popAsc,
+            kwInsight,
+            kwScope,
             popChart,
             top3Chart,
             histChart,
@@ -709,7 +805,6 @@ const AnalysisView = {
             bestInd,
             problemLabel,
             isRunMode: computed(() => source.value?.type === "run"),
-            popAsc,
             statusName: s => STATUS_LABEL[s] ?? s ?? "—",
             fmtObj,
             fmtTokens,

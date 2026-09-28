@@ -501,7 +501,13 @@ async function viewCurve(view, params) {
         }
         const cfg = inst.config ?? {};
         const asc = cfg.ascend !== false;
-        const gens = (inst.population_snapshot ?? []).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0));
+        const gens = (inst.population_snapshot ?? []).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)).map(g => ({
+            ...g,
+            heuristics: (g.heuristics ?? []).map(h => ({
+                ...h,
+                features: h.features ?? h.feature ?? [],
+            })),
+        }));
         const statOf = g => {
             const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
             return {
@@ -677,7 +683,13 @@ async function viewCompare(view) {
         const inst = rec.instance;
         const cfg = inst?.config ?? {};
         const asc = cfg.ascend !== false;
-        const gens = (inst?.population_snapshot ?? []).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0));
+        const gens = (inst?.population_snapshot ?? []).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)).map(g => ({
+            ...g,
+            heuristics: (g.heuristics ?? []).map(h => ({
+                ...h,
+                features: h.features ?? h.feature ?? [],
+            })),
+        }));
         const bests = gens.map(g => {
             const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
             return objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;

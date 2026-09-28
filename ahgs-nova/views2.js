@@ -555,6 +555,7 @@ async function viewEvo(view, params) {
                     concept: h.concept,
                     algorithm: h.algorithm,
                     features: h.features ?? [],
+                    feature: h.features ?? [],
                     objective: h.objective == null || h.objective === Infinity ? null : h.objective,
                 })),
                 memory: pop.memory ?? {
