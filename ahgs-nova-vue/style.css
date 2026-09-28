@@ -1418,19 +1418,31 @@ details.tier summary:hover { background: var(--row-hover); }
 }
 .tier-body { padding: 4px 14px 10px; }
 .tier-row {
-  display: grid;
-  grid-template-columns: minmax(90px, 160px) 90px 76px 1fr auto;
+  display: flex;
   gap: 10px;
   align-items: center;
   padding: 5px 8px;
   border-radius: 7px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
+  overflow: hidden;
 }
 .tier-row:hover { background: var(--row-hover); }
-.tier-track { font-weight: 700; }
-.tier-best { font-weight: 800; color: var(--accent); }
-.tier-dir, .tier-meta { font-size: 11.5px; color: var(--text-faint); }
+.tier-track { font-weight: 700; min-width: 72px; }
+.tier-rank { font-size: 11px; color: var(--text-dim); min-width: 42px; }
+.tier-best { font-weight: 800; color: var(--accent); min-width: 78px; text-align: right; }
+.tier-model {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.tier-tok { font-size: 11.5px; color: var(--text-dim); min-width: 58px; text-align: right; }
+.tier-meta { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+.tier-spark { flex: none; }
+.tier-body { overflow-x: auto; }
 .tier-dim { opacity: .55; }
 details.tier.tier-dim .tier-count { background: var(--border-strong); color: var(--text-dim); }
 

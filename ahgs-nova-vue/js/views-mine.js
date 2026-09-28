@@ -37,10 +37,14 @@ const MineView = {
           <div class="tier-body">
             <div v-for="c in g.items" :key="c.key" class="tier-row" :title="c.fullName" @click="jumpTo(c.key)">
               <span class="tier-track">{{ c.name }}</span>
+              <span class="tier-rank mono">{{ c.rank ? "第" + c.rank + "名" : "—" }}</span>
               <span class="tier-best mono">{{ c.best != null ? fmtObj(c.best) : "—" }}</span>
-              <span class="tier-dir">{{ c.asc ? "越小越好" : "越大越好" }}</span>
+              <span v-if="c.fw" class="tier-fw"><FwBadge :ft="c.fw" /></span>
+              <span class="tier-model mono" :title="c.model ?? ''">{{ c.model || "—" }}</span>
+              <span class="tier-tok mono" title="累计 token">{{ c.tokens ? "Σ" + fmtTokens(c.tokens) : "—" }}</span>
               <span class="tier-meta">{{ c.count }} 次<template v-if="c.lastAt"> · {{ fmtTime(c.lastAt) }}</template></span>
               <span v-if="c.spark.length > 1" class="tier-spark" v-html="sparkSVG(c.spark)"></span>
+              <button class="btn small" @click.stop="navHash('curve', new URLSearchParams({ id: String(c.bestId) }))" :disabled="!c.bestId">分析</button>
             </div>
           </div>
         </details>
@@ -187,13 +191,20 @@ const MineView = {
             .sort((a, b) => (parseServerTime(a.created_at)?.getTime() ?? 0) - (parseServerTime(b.created_at)?.getTime() ?? 0));
           const objs = subs.map(x => Number(x.objective)).filter(isFinite);
           const asc = p.ascend !== false;
+          const best = objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;
+          const bestSub = best != null ? subs.find(x => Number(x.objective) === best) : null;
+          const tokens = subs.reduce((a, x) => a + (Number(x.total_tokens) || 0), 0);
           return {
             key: p.key,
             name: p.name.split(" ")[0],
             fullName: p.name,
             asc,
             rank: rank?.rank ?? null,
-            best: objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null,
+            best,
+            bestId: bestSub?.id ?? null,
+            fw: bestSub?.framework_type ?? null,
+            model: bestSub?.llm_model ?? null,
+            tokens,
             count: subs.length,
             lastAt: subs.at(-1)?.created_at ?? null,
             spark: objs,

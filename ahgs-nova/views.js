@@ -858,10 +858,16 @@ async function viewMine(view, params) {
             const objs = subs.map(x => Number(x.objective)).filter(isFinite);
             const asc = p.ascend !== false;
             const best = objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;
+            const bestSub = best != null ? subs.find(x => Number(x.objective) === best) : null;
+            const tokens = subs.reduce((a, x) => a + (Number(x.total_tokens) || 0), 0);
             const part = subs.length > 0 || !!rank;
             return {
                 key: p.key, name: p.name.split(" ")[0], fullName: p.name, asc,
                 rank: rank ? rank.rank : null, best,
+                bestId: bestSub ? bestSub.id : null,
+                fw: bestSub ? bestSub.framework_type : null,
+                model: bestSub ? bestSub.llm_model : null,
+                tokens,
                 count: subs.length, lastAt: subs.length ? subs[subs.length - 1].created_at : null,
                 spark: objs, participated: part,
             };
@@ -874,10 +880,14 @@ async function viewMine(view, params) {
           <summary><span class="tier-name">${esc(g.label)}</span><span class="tier-count">${g.items.length} 个赛道</span><span class="tier-preview">${esc(g.items.map(i => i.name).join("、"))}</span></summary>
           <div class="tier-body">${g.items.map(c => `<div class="tier-row" title="${esc(c.fullName)}" onclick="document.getElementById('sec-${esc(c.key)}')?.scrollIntoView({ behavior: 'smooth' })">
             <span class="tier-track">${esc(c.name)}</span>
+            <span class="tier-rank mono">${c.rank ? "第" + c.rank + "名" : "—"}</span>
             <span class="tier-best mono">${fmtObj(c.best)}</span>
-            <span class="tier-dir">${c.asc ? "越小越好" : "越大越好"}</span>
+            ${c.fw ? fwBadge(c.fw) : ""}
+            <span class="tier-model mono" title="${esc(c.model ?? "")}">${esc(c.model || "—")}</span>
+            <span class="tier-tok mono" title="累计 token">${c.tokens ? "Σ" + fmtTokens(c.tokens) : "—"}</span>
             <span class="tier-meta">${c.count} 次${c.lastAt ? " · " + fmtTime(c.lastAt) : ""}</span>
             ${c.spark.length > 1 ? sparklineSVG(c.spark) : ""}
+            <button class="btn small" ${c.bestId ? `onclick="event.stopPropagation(); location.hash = '#/curve?id=${esc(c.bestId)}'"` : "disabled"}>分析</button>
           </div>`).join("")}</div>
         </details>`).join("");
         $("mn-body").innerHTML = (keys.length ? `<div class="mine-head"><span class="mine-title">各赛道速览</span>
