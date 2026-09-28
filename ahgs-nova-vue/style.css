@@ -1373,3 +1373,9 @@ th.num {
   background: var(--accent);
   color: var(--on-accent);
 }
+
+/* 各赛道速览卡片 */
+.track-card { cursor: pointer; transition: border-color .15s, transform .12s; }
+.track-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.track-card.dim { opacity: .5; }
+.track-card .v { font-size: 20px; }

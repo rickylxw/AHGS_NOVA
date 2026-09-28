@@ -841,7 +841,27 @@ async function viewMine(view, params) {
             byProblem.get(s.problem_key).push(s);
         }
         const keys = [...new Set([...rankMap.keys(), ...byProblem.keys()])];
-        $("mn-body").innerHTML = keys.length ? keys.map(key => {
+        const trackCards = state.problems.map(p => {
+            const rank = rankMap.get(p.key);
+            const subs = (byProblem.get(p.key) ?? []).slice().sort((a, b) => (parseServerTime(a.created_at)?.getTime() ?? 0) - (parseServerTime(b.created_at)?.getTime() ?? 0));
+            const objs = subs.map(x => Number(x.objective)).filter(isFinite);
+            const asc = p.ascend !== false;
+            const best = objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;
+            const part = subs.length > 0 || !!rank;
+            return `<div class="stat track-card ${part ? "" : "dim"}" title="${esc(p.name)}" onclick="document.getElementById('sec-${esc(p.key)}')?.scrollIntoView({ behavior: 'smooth' })">
+          <div class="k">${esc(p.name.split(" ")[0])} <span class="hint" style="font-size:10.5px">${asc ? "越小越好" : "越大越好"}</span></div>
+          <div class="v mono">${fmtObj(best)}</div>
+          <div class="s">${rank ? `第 ${rank.rank} 名${rank.rank <= 3 ? " " + ["🥇", "🥈", "🥉"][rank.rank - 1] : ""}` : (part ? "未上榜" : "未参加")}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:6px">
+            <span class="hint" style="font-size:11.5px">${subs.length} 次${subs.length ? " · " + fmtTime(subs[subs.length - 1].created_at) : ""}</span>
+            ${objs.length > 1 ? sparklineSVG(objs) : ""}
+          </div>
+        </div>`;
+        }).join("");
+        const participated = state.problems.filter(p => rankMap.get(p.key) || (byProblem.get(p.key) ?? []).length).length;
+        $("mn-body").innerHTML = (keys.length ? `<div class="mine-head"><span class="mine-title">各赛道速览</span>
+      <span class="hint">共 ${state.problems.length} 个赛道 · ${participated} 个已参与 · 点卡片跳到明细</span></div>
+      <div class="grid cols-4" style="margin-bottom:16px">${trackCards}</div>` : "") + (keys.length ? keys.map(key => {
             const p = state.problemMap.get(key);
             const rank = rankMap.get(key);
             const list = (byProblem.get(key) ?? []).slice().sort((a, b) => (parseServerTime(a.created_at)?.getTime() ?? 0) - (parseServerTime(b.created_at)?.getTime() ?? 0));
@@ -856,7 +876,7 @@ async function viewMine(view, params) {
           <td class="mono hint">${fmtTime(s.created_at)}</td>
           <td><button class="btn small" data-action="goto-curve" data-sid="${esc(s.id)}">曲线</button></td>
         </tr>`).join("");
-            return `<section>
+            return `<section id="sec-${esc(key)}">
         <div class="mine-head">
           <span class="mine-title">${esc(rank?.problem_name || p?.name || key)}</span>
           ${rank ? `<span class="mine-rank">${rank.rank <= 3 ? ["🥇", "🥈", "🥉"][rank.rank - 1] : ""} 第 <b class="mono">${rank.rank}</b> 名 · 最优 <b class="mono">${fmtObj(rank.best_objective)}</b></span>` : `<span class="hint">暂无名次</span>`}
@@ -866,7 +886,7 @@ async function viewMine(view, params) {
           <thead><tr><th>ID</th><th>框架</th><th>模型</th><th class="num">适应度</th><th class="num">token</th><th>提交时间</th><th></th></tr></thead>
           <tbody>${rows}</tbody></table></div>` : `<div class="hint">无提交记录</div>`}
       </section>`;
-        }).join("") : emptyHTML("🗂️", "你还没有参赛记录，去「进化」发起一次，或去平台「AHG进化」页提交");
+        }).join("") : "") + (keys.length ? "" : emptyHTML("🗂️", "你还没有参赛记录，去「进化」发起一次，或去平台「AHG进化」页提交"));
     }
 
     /* ---------- 实例与进化记录 ---------- */
