@@ -84,7 +84,7 @@ async function viewEvo(view, params) {
         </div>
         <div class="grid cols-2">
           <div class="field"><label>LLM 预设</label>
-            <select id="evo-preset">${presets.map(p => `<option value="${esc(p.id)}">${esc(p.name)}（${esc(p.provider)}）</option>`).join("")}<option value="custom">自定义（手动填写 Base URL / 模型）</option></select></div>
+            <select id="evo-preset">${presets.map(p => `<option value="${esc(p.id)}">${esc(p.name)}（${esc(p.provider)}）</option>`).join("")}</select></div>
           <div class="field"><label>模型 ID</label><input id="evo-model" placeholder="自定义模型名，如 custom-model"></div>
         </div>
         <div class="grid cols-2">

@@ -37,8 +37,7 @@ const EvoView = {
         <div class="field"><label>LLM 预设</label>
           <select v-model="presetSel" @change="applyPreset">
             <option v-for="p in presets" :key="p.id" :value="p.id">{{ p.name }}（{{ p.provider }}）</option>
-            <option value="custom">自定义（手动填写 Base URL / 模型）</option>
-          </select></div>
+            </select></div>
         <template v-if="!cfg.use_local_llm">
           <div class="grid cols-2">
             <div class="field"><label>模型 ID</label><input v-model="cfg.llm_model" placeholder="自定义模型名，如 custom-model"></div>
