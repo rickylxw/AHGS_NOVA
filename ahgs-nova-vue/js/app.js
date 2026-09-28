@@ -2,8 +2,10 @@
 "use strict";
 
 const App = {
-  components: { LoginModal },
-  template: `
+    components: {
+        LoginModal
+    },
+    template: `
   <div id="bg-glow" aria-hidden="true"></div>
   <header id="topbar">
     <a class="brand" href="#/dashboard">
@@ -64,60 +66,129 @@ const App = {
   <div class="toast-root" aria-live="polite">
     <div v-for="t in store.toasts" :key="t.id" class="toast" :class="t.kind">{{ t.msg }}</div>
   </div>`,
-  setup() {
-    const ready = ref(false), bootErr = ref("");
-    const settingsOpen = ref(false), apiInput = ref(apiBase()), apiMsg = ref("");
-    const navItems = [
-      { name: "dashboard", label: "总览" }, { name: "leaderboard", label: "排行榜" }, { name: "live", label: "实时流" },
-      { name: "evo", label: "进化" }, { name: "cprob", label: "自定义问题" },
-      { name: "curve", label: "曲线分析" }, { name: "compare", label: "对比" }, { name: "mine", label: "我的" },
-    ];
-    const routeComp = computed(() => getRouteComp(store.route.name));
-    const routeKey = computed(() => store.route.name + ":" + (store.route.params.get("id") ?? "") + ":" + (store.route.params.get("run") ?? "") + ":" + (store.viewVer ?? 0));
-    const drawerComp = computed(() => (store.drawer && DRAWER_COMPS[store.drawer.comp]) || "div");
+    setup() {
+        const ready = ref(false),
+            bootErr = ref("");
+        const settingsOpen = ref(false),
+            apiInput = ref(apiBase()),
+            apiMsg = ref("");
+        const navItems = [{
+                name: "dashboard",
+                label: "总览"
+            }, {
+                name: "leaderboard",
+                label: "排行榜"
+            }, {
+                name: "live",
+                label: "实时流"
+            },
+            {
+                name: "evo",
+                label: "进化"
+            }, {
+                name: "cprob",
+                label: "自定义问题"
+            },
+            {
+                name: "curve",
+                label: "曲线分析"
+            }, {
+                name: "compare",
+                label: "对比"
+            }, {
+                name: "mine",
+                label: "我的"
+            },
+        ];
+        const routeComp = computed(() => getRouteComp(store.route.name));
+        const routeKey = computed(() => store.route.name + ":" + (store.route.params.get("id") ?? "") + ":" + (store.route.params.get("run") ?? "") + ":" + (store.viewVer ?? 0));
+        const drawerComp = computed(() => (store.drawer && DRAWER_COMPS[store.drawer.comp]) || "div");
 
-    onMounted(async () => {
-      applyTheme(store.theme);
-      Object.assign(store.route, parseHash());
-      try {
-        const r = await api("/api/problems");
-        store.problems = r.problems ?? [];
-      } catch (e) { bootErr.value = e.message; ready.value = true; return; }
-      ready.value = true;
-      if (getToken()) {
-        api("/api/auth/me").then(u => { setSession(null, u); store.user = u; }).catch(() => {});
-      }
-    });
-    // 同步登录用户到 store（供门控判断）
-    watch(() => store.user, u => { if (u) store.viewVer = (store.viewVer || 0) + 1; });
+        onMounted(async () => {
+            applyTheme(store.theme);
+            Object.assign(store.route, parseHash());
+            try {
+                const r = await api("/api/problems");
+                store.problems = r.problems ?? [];
+            } catch (e) {
+                bootErr.value = e.message;
+                ready.value = true;
+                return;
+            }
+            ready.value = true;
+            if (getToken()) {
+                api("/api/auth/me").then(u => {
+                    setSession(null, u);
+                    store.user = u;
+                }).catch(() => {});
+            }
+        });
+        // 同步登录用户到 store（供门控判断）
+        watch(() => store.user, u => {
+            if (u) store.viewVer = (store.viewVer || 0) + 1;
+        });
 
-    function toggleTheme() {
-      store.theme = store.theme === "dark" ? "light" : "dark";
-      applyTheme(store.theme);
-    }
-    async function saveApi() {
-      const v = apiInput.value.trim().replace(/\/+$/, "");
-      if (v) localStorage.setItem(LS.api, v); else localStorage.removeItem(LS.api);
-      apiMsg.value = "测试连接中…";
-      try {
-        await api("/api/problems");
-        apiMsg.value = "✅ 连接成功";
-        setTimeout(() => location.reload(), 500);
-      } catch (e) { apiMsg.value = "❌ " + e.message; }
-    }
-    function resetApi() { localStorage.removeItem(LS.api); location.reload(); }
-    const onKey = ev => { if (ev.key === "Escape") { closeDrawer(); store.loginModal = false; settingsOpen.value = false; } };
-    const onClick = ev => { if (settingsOpen.value && !ev.target.closest(".popover") && !ev.target.closest(".icon-btn")) settingsOpen.value = false; };
-    onMounted(() => {
-      document.addEventListener("keydown", onKey);
-      document.addEventListener("click", onClick);
-    });
-    onUnmounted(() => {
-      document.removeEventListener("keydown", onKey);
-      document.removeEventListener("click", onClick);
-    });
-    return { store, ready, bootErr, navItems, routeComp, routeKey, drawerComp, settingsOpen, apiInput, apiMsg, toggleTheme, saveApi, resetApi, closeDrawer, navHash, fullName, apiBase, DEFAULT_API };
-  },
+        function toggleTheme() {
+            store.theme = store.theme === "dark" ? "light" : "dark";
+            applyTheme(store.theme);
+        }
+        async function saveApi() {
+            const v = apiInput.value.trim().replace(/\/+$/, "");
+            if (v) localStorage.setItem(LS.api, v);
+            else localStorage.removeItem(LS.api);
+            apiMsg.value = "测试连接中…";
+            try {
+                await api("/api/problems");
+                apiMsg.value = "✅ 连接成功";
+                setTimeout(() => location.reload(), 500);
+            } catch (e) {
+                apiMsg.value = "❌ " + e.message;
+            }
+        }
+
+        function resetApi() {
+            localStorage.removeItem(LS.api);
+            location.reload();
+        }
+        const onKey = ev => {
+            if (ev.key === "Escape") {
+                closeDrawer();
+                store.loginModal = false;
+                settingsOpen.value = false;
+            }
+        };
+        const onClick = ev => {
+            if (settingsOpen.value && !ev.target.closest(".popover") && !ev.target.closest(".icon-btn")) settingsOpen.value = false;
+        };
+        onMounted(() => {
+            document.addEventListener("keydown", onKey);
+            document.addEventListener("click", onClick);
+        });
+        onUnmounted(() => {
+            document.removeEventListener("keydown", onKey);
+            document.removeEventListener("click", onClick);
+        });
+        return {
+            store,
+            ready,
+            bootErr,
+            navItems,
+            routeComp,
+            routeKey,
+            drawerComp,
+            settingsOpen,
+            apiInput,
+            apiMsg,
+            toggleTheme,
+            saveApi,
+            resetApi,
+            closeDrawer,
+            navHash,
+            fullName,
+            apiBase,
+            DEFAULT_API
+        };
+    },
 };
 
 /* ---------- 全局注册 + 挂载 ---------- */
@@ -130,8 +201,23 @@ app.component("UserCell", UserCell);
 app.component("EmptyState", EmptyState);
 // 模板里可直接使用的工具函数
 Object.assign(app.config.globalProperties, {
-  store, fullName, fmtObj, fmtTokens, fmtTime, parseServerTime, copyText, toast,
-  navHash, closeDrawer, openSubmissionDrawer, openUserDrawer, getToken,
-  apiBase, DEFAULT_API, FW_LABEL, STATUS_LABEL, isAscend,
+    store,
+    fullName,
+    fmtObj,
+    fmtTokens,
+    fmtTime,
+    parseServerTime,
+    copyText,
+    toast,
+    navHash,
+    closeDrawer,
+    openSubmissionDrawer,
+    openUserDrawer,
+    getToken,
+    apiBase,
+    DEFAULT_API,
+    FW_LABEL,
+    STATUS_LABEL,
+    isAscend,
 });
 app.mount("#app");

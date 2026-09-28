@@ -3,9 +3,13 @@
 
 /* ==================== 曲线分析 ==================== */
 const CurveView = {
-  components: { EmptyState, FwBadge, SrcBadge },
-  props: ["params"],
-  template: `
+    components: {
+        EmptyState,
+        FwBadge,
+        SrcBadge
+    },
+    props: ["params"],
+    template: `
   <div>
     <div class="card">
       <h2>进化曲线分析 <span class="tail">输入提交 ID，或从下拉中选择</span></h2>
@@ -114,96 +118,195 @@ const CurveView = {
       </template>
     </template>
   </div>`,
-  setup(props) {
-    const sid = ref(props.params.get("id") || "");
-    const recentList = ref([]), mySubs = ref([]);
-    const recentSel = ref(""), mineSel = ref("");
-    const state = ref(sid.value ? "loading" : "idle");
-    const rec = ref(null), errMsg = ref(""), err401 = ref(false);
+    setup(props) {
+        const sid = ref(props.params.get("id") || "");
+        const recentList = ref([]),
+            mySubs = ref([]);
+        const recentSel = ref(""),
+            mineSel = ref("");
+        const state = ref(sid.value ? "loading" : "idle");
+        const rec = ref(null),
+            errMsg = ref(""),
+            err401 = ref(false);
 
-    onMounted(async () => {
-      recentList.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
-      if (getToken()) mySubs.value = await api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []);
-      if (sid.value) analyze();
-    });
+        onMounted(async () => {
+            recentList.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
+            if (getToken()) mySubs.value = await api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []);
+            if (sid.value) analyze();
+        });
 
-    const inst = computed(() => rec.value?.instance ?? null);
-    const sub = computed(() => rec.value?.submission ?? {});
-    const cfg = computed(() => inst.value?.config ?? {});
-    const asc = computed(() => cfg.value.ascend !== false);
-    const gens = computed(() => ((inst.value?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)));
-    const genStats = computed(() => gens.value.map(g => {
-      const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
-      return {
-        n: objs.length,
-        best: objs.length ? (asc.value ? Math.min(...objs) : Math.max(...objs)) : null,
-        avg: objs.length ? objs.reduce((a, b) => a + b, 0) / objs.length : null,
-        worst: objs.length ? (asc.value ? Math.max(...objs) : Math.min(...objs)) : null,
-        tok: tokOf(g.token_usage),
-      };
-    }));
-    function tokOf(t) {
-      if (t == null) return null;
-      if (typeof t === "number") return t;
-      if (typeof t === "object") return t.total_tokens ?? t.total ?? t.tokens ?? null;
-      return null;
-    }
-    const gensWithHeurs = computed(() => gens.value.map((g, gi) => ({
-      ...g,
-      sorted: (g.heuristics ?? []).slice().sort((a, b) => {
-        const x = Number(a?.objective), y = Number(b?.objective);
-        if (!isFinite(x) && !isFinite(y)) return 0;
-        if (!isFinite(x)) return 1;
-        if (!isFinite(y)) return -1;
-        return asc.value ? x - y : y - x;
-      }),
-    })));
-    const bestPts = computed(() => genStats.value.map((s, i) => ({ x: gens.value[i].generation ?? i, y: s.best, label: "第 " + (gens.value[i].generation ?? i) + " 代" })).filter(p => p.y != null));
-    const avgPts = computed(() => genStats.value.map((s, i) => ({ x: gens.value[i].generation ?? i, y: s.avg, label: "第 " + (gens.value[i].generation ?? i) + " 代" })).filter(p => p.y != null));
-    const mainChart = computed(() => lineChartSVG([
-      { name: "每代最优", color: "#22d3ee", points: bestPts.value },
-      { name: "每代平均", color: "#a78bfa", dashed: true, points: avgPts.value },
-    ], { yLabel: "适应度" }));
-    const heurCount = computed(() => genStats.value.reduce((a, s) => a + s.n, 0));
-    const firstBest = computed(() => bestPts.value[0]?.y ?? null);
-    const finalBest = computed(() => bestPts.value.at(-1)?.y ?? null);
-    const improve = computed(() => {
-      const f = firstBest.value, l = finalBest.value;
-      if (f == null || l == null || f === 0) return null;
-      return (asc.value ? (f - l) / Math.abs(f) : (l - f) / Math.abs(f)) * 100;
-    });
-    const anyTok = computed(() => genStats.value.some(s => s.tok != null));
-    const tokTotal = computed(() => genStats.value.reduce((a, s) => a + (s.tok ?? 0), 0));
-    const tokSeries = computed(() => genStats.value.map((s, i) => ({ label: String(gens.value[i].generation ?? i), value: s.tok ?? 0, tip: "第 " + (gens.value[i].generation ?? i) + " 代" })));
-    const tokChart = computed(() => barChartSVG(tokSeries.value));
-    const subObjective = computed(() => sub.value.objective ?? finalBest.value);
-    const customCode = computed(() => inst.value?.framework_type === "custom" ? (cfg.value.framework_code ?? "") : "");
+        const inst = computed(() => rec.value?.instance ?? null);
+        const sub = computed(() => rec.value?.submission ?? {});
+        const cfg = computed(() => inst.value?.config ?? {});
+        const asc = computed(() => cfg.value.ascend !== false);
+        const gens = computed(() => ((inst.value?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0)));
+        const genStats = computed(() => gens.value.map(g => {
+            const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
+            return {
+                n: objs.length,
+                best: objs.length ? (asc.value ? Math.min(...objs) : Math.max(...objs)) : null,
+                avg: objs.length ? objs.reduce((a, b) => a + b, 0) / objs.length : null,
+                worst: objs.length ? (asc.value ? Math.max(...objs) : Math.min(...objs)) : null,
+                tok: tokOf(g.token_usage),
+            };
+        }));
 
-    function pickRecent() { if (recentSel.value) { sid.value = recentSel.value; analyze(); } }
-    function pickMine() { if (mineSel.value) { sid.value = mineSel.value; analyze(); } }
-    async function analyze() {
-      const id = String(sid.value).trim();
-      if (!id) { toast("请先填写提交 ID", "err"); return; }
-      try { history.replaceState(null, "", "#/curve?id=" + encodeURIComponent(id)); } catch {}
-      store.route = { name: "curve", params: new URLSearchParams({ id }) };
-      state.value = "loading"; err401.value = false;
-      try {
-        rec.value = await api(`/api/submissions/${id}/record`);
-        state.value = "done";
-      } catch (e) {
-        state.value = "err"; errMsg.value = e.message; err401.value = e.status === 401;
-      }
-    }
-    return { store, getToken, sid, recentList, mySubs, recentSel, mineSel, pickRecent, pickMine, state, rec, errMsg, err401, analyze, inst, sub, cfg, asc, gens, genStats, gensWithHeurs, mainChart, tokChart, tokSeries, heurCount, firstBest, improve, anyTok, tokTotal, subObjective, customCode, fmtObj, fmtTokens, fmtTime, fullName, copyText, EmptyState, FwBadge, SrcBadge, Avatar };
-  },
+        function tokOf(t) {
+            if (t == null) return null;
+            if (typeof t === "number") return t;
+            if (typeof t === "object") return t.total_tokens ?? t.total ?? t.tokens ?? null;
+            return null;
+        }
+        const gensWithHeurs = computed(() => gens.value.map((g, gi) => ({
+            ...g,
+            sorted: (g.heuristics ?? []).slice().sort((a, b) => {
+                const x = Number(a?.objective),
+                    y = Number(b?.objective);
+                if (!isFinite(x) && !isFinite(y)) return 0;
+                if (!isFinite(x)) return 1;
+                if (!isFinite(y)) return -1;
+                return asc.value ? x - y : y - x;
+            }),
+        })));
+        const bestPts = computed(() => genStats.value.map((s, i) => ({
+            x: gens.value[i].generation ?? i,
+            y: s.best,
+            label: "第 " + (gens.value[i].generation ?? i) + " 代"
+        })).filter(p => p.y != null));
+        const avgPts = computed(() => genStats.value.map((s, i) => ({
+            x: gens.value[i].generation ?? i,
+            y: s.avg,
+            label: "第 " + (gens.value[i].generation ?? i) + " 代"
+        })).filter(p => p.y != null));
+        const mainChart = computed(() => lineChartSVG([{
+                name: "每代最优",
+                color: "#22d3ee",
+                points: bestPts.value
+            },
+            {
+                name: "每代平均",
+                color: "#a78bfa",
+                dashed: true,
+                points: avgPts.value
+            },
+        ], {
+            yLabel: "适应度"
+        }));
+        const heurCount = computed(() => genStats.value.reduce((a, s) => a + s.n, 0));
+        const firstBest = computed(() => bestPts.value[0]?.y ?? null);
+        const finalBest = computed(() => bestPts.value.at(-1)?.y ?? null);
+        const improve = computed(() => {
+            const f = firstBest.value,
+                l = finalBest.value;
+            if (f == null || l == null || f === 0) return null;
+            return (asc.value ? (f - l) / Math.abs(f) : (l - f) / Math.abs(f)) * 100;
+        });
+        const anyTok = computed(() => genStats.value.some(s => s.tok != null));
+        const tokTotal = computed(() => genStats.value.reduce((a, s) => a + (s.tok ?? 0), 0));
+        const tokSeries = computed(() => genStats.value.map((s, i) => ({
+            label: String(gens.value[i].generation ?? i),
+            value: s.tok ?? 0,
+            tip: "第 " + (gens.value[i].generation ?? i) + " 代"
+        })));
+        const tokChart = computed(() => barChartSVG(tokSeries.value));
+        const subObjective = computed(() => sub.value.objective ?? finalBest.value);
+        const customCode = computed(() => inst.value?.framework_type === "custom" ? (cfg.value.framework_code ?? "") : "");
+
+        function pickRecent() {
+            if (recentSel.value) {
+                sid.value = recentSel.value;
+                analyze();
+            }
+        }
+
+        function pickMine() {
+            if (mineSel.value) {
+                sid.value = mineSel.value;
+                analyze();
+            }
+        }
+        async function analyze() {
+            const id = String(sid.value).trim();
+            if (!id) {
+                toast("请先填写提交 ID", "err");
+                return;
+            }
+            try {
+                history.replaceState(null, "", "#/curve?id=" + encodeURIComponent(id));
+            } catch {}
+            store.route = {
+                name: "curve",
+                params: new URLSearchParams({
+                    id
+                })
+            };
+            state.value = "loading";
+            err401.value = false;
+            try {
+                rec.value = await api(`/api/submissions/${id}/record`);
+                state.value = "done";
+            } catch (e) {
+                state.value = "err";
+                errMsg.value = e.message;
+                err401.value = e.status === 401;
+            }
+        }
+        return {
+            store,
+            getToken,
+            sid,
+            recentList,
+            mySubs,
+            recentSel,
+            mineSel,
+            pickRecent,
+            pickMine,
+            state,
+            rec,
+            errMsg,
+            err401,
+            analyze,
+            inst,
+            sub,
+            cfg,
+            asc,
+            gens,
+            genStats,
+            gensWithHeurs,
+            mainChart,
+            tokChart,
+            tokSeries,
+            heurCount,
+            firstBest,
+            improve,
+            anyTok,
+            tokTotal,
+            subObjective,
+            customCode,
+            fmtObj,
+            fmtTokens,
+            fmtTime,
+            fullName,
+            copyText,
+            EmptyState,
+            FwBadge,
+            SrcBadge,
+            Avatar
+        };
+    },
 };
 ROUTE_COMPS.curve = CurveView;
 
 /* ==================== 双提交对比 ==================== */
 const CompareView = {
-  components: { EmptyState, FwBadge, SrcBadge, Avatar },
-  props: ["params"],
-  template: `
+    components: {
+        EmptyState,
+        FwBadge,
+        SrcBadge,
+        Avatar
+    },
+    props: ["params"],
+    template: `
   <div>
     <div class="card">
       <h2>双提交对比 <span class="tail">对比两次提交的进化过程与最终成绩</span></h2>
@@ -288,75 +391,156 @@ const CompareView = {
     </div>
     <div v-else class="card"><EmptyState icon="⚔️" desc="选择两个提交开始对比" /></div>
   </div>`,
-  setup() {
-    const recent = ref([]);
-    const idA = ref(""), idB = ref(""), pickA = ref(""), pickB = ref("");
-    const state = ref("idle"), errMsg = ref(""), err401 = ref(false);
-    const A = ref(null), B = ref(null);
-    onMounted(() => { recent.value = api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []); });
-    watch(pickA, v => { if (v) idA.value = v; });
-    watch(pickB, v => { if (v) idB.value = v; });
+    setup() {
+        const recent = ref([]);
+        const idA = ref(""),
+            idB = ref(""),
+            pickA = ref(""),
+            pickB = ref("");
+        const state = ref("idle"),
+            errMsg = ref(""),
+            err401 = ref(false);
+        const A = ref(null),
+            B = ref(null);
+        onMounted(() => {
+            recent.value = api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
+        });
+        watch(pickA, v => {
+            if (v) idA.value = v;
+        });
+        watch(pickB, v => {
+            if (v) idB.value = v;
+        });
 
-    async function fetchOne(id) {
-      if (!id) throw new Error("请填写两侧的提交 ID");
-      const recData = await api(`/api/submissions/${id}/record`);
-      const instData = recData.instance;
-      const cfg = instData?.config ?? {};
-      const asc = cfg.ascend !== false;
-      const gens = ((instData?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0));
-      const bests = gens.map(g => {
-        const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
-        return objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;
-      });
-      return { id, sub: recData.submission ?? {}, inst: instData, asc, gens, bests };
-    }
-    const sameProblem = computed(() => A.value && B.value && (A.value.sub.problem_key || A.value.inst?.problem_key) === (B.value.sub.problem_key || B.value.inst?.problem_key));
+        async function fetchOne(id) {
+            if (!id) throw new Error("请填写两侧的提交 ID");
+            const recData = await api(`/api/submissions/${id}/record`);
+            const instData = recData.instance;
+            const cfg = instData?.config ?? {};
+            const asc = cfg.ascend !== false;
+            const gens = ((instData?.population_snapshot ?? [])).slice().sort((a, b) => (a.generation ?? 0) - (b.generation ?? 0));
+            const bests = gens.map(g => {
+                const objs = (g.heuristics ?? []).map(h => Number(h?.objective)).filter(isFinite);
+                return objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;
+            });
+            return {
+                id,
+                sub: recData.submission ?? {},
+                inst: instData,
+                asc,
+                gens,
+                bests
+            };
+        }
+        const sameProblem = computed(() => A.value && B.value && (A.value.sub.problem_key || A.value.inst?.problem_key) === (B.value.sub.problem_key || B.value.inst?.problem_key));
 
-    function improveSeries(d) {
-      const first = d.bests.find(isFinite);
-      if (first == null || first === 0) return [];
-      return d.bests.map((v, i) => isFinite(v) ? {
-        x: i, y: d.asc ? (first - v) / Math.abs(first) * 100 : (v - first) / Math.abs(first) * 100, label: `#${d.id} 第 ${i} 代`,
-      } : null).filter(Boolean);
-    }
-    const overlayChart = computed(() => {
-      if (!A.value || !B.value) return "";
-      return lineChartSVG([
-        { name: "A 提升%", color: "#22d3ee", points: improveSeries(A.value) },
-        { name: "B 提升%", color: "#f472b6", points: improveSeries(B.value) },
-      ], { yLabel: "相对首代提升 %", xFormat: x => "第" + Math.round(x) + "代" });
-    });
-    const chartA = computed(() => !A.value ? "" : lineChartSVG([{ name: "每代最优", color: "#22d3ee", points: A.value.bests.map((v, i) => ({ x: i, y: v, label: "第 " + i + " 代" })).filter(p => p.y != null) }]));
-    const chartB = computed(() => !B.value ? "" : lineChartSVG([{ name: "每代最优", color: "#f472b6", points: B.value.bests.map((v, i) => ({ x: i, y: v, label: "第 " + i + " 代" })).filter(p => p.y != null) }]));
-    const deltaRows = computed(() => {
-      if (!A.value || !B.value) return [];
-      const ascend = isAscend(A.value.sub.problem_key || A.value.inst?.problem_key);
-      const mk = (label, va, vb, fmt, better) => {
-        if (label === "适应度") better = ascend ? "low" : "high";
-        const na = va ?? null, nb = vb ?? null;
-        const dv = na != null && nb != null ? nb - na : null;
-        let cls = "";
-        if (dv != null && dv !== 0) cls = (better === "low" ? dv < 0 : dv > 0) ? "delta-up" : "delta-down";
-        return { label, va: fmt(na), vb: fmt(nb), dv: dv == null ? "—" : (dv > 0 ? "+" : "") + fmt(dv), cls };
-      };
-      const heurN = d => d.gens.reduce((a, g) => a + (g.heuristics?.length ?? 0), 0);
-      return [
-        mk("适应度", A.value.sub.objective, B.value.sub.objective, fmtObj, "low"),
-        mk("所耗 token", A.value.sub.total_tokens, B.value.sub.total_tokens, fmtTokens, "low"),
-        mk("进化代数", A.value.gens.length, B.value.gens.length, v => String(v ?? "—"), "low"),
-        mk("种群个体总数", heurN(A.value), heurN(B.value), v => String(v ?? "—"), "low"),
-      ];
-    });
-    async function run() {
-      state.value = "loading"; err401.value = false;
-      try {
-        const [a, b] = await Promise.all([fetchOne(String(idA.value).trim()), fetchOne(String(idB.value).trim())]);
-        A.value = a; B.value = b; state.value = "done";
-      } catch (e) {
-        state.value = "err"; errMsg.value = e.message; err401.value = e.status === 401;
-      }
-    }
-    return { store, recent, idA, idB, pickA, pickB, state, errMsg, err401, A, B, sameProblem, overlayChart, chartA, chartB, deltaRows, run, fmtObj, fmtTokens, fullName, store: store };
-  },
+        function improveSeries(d) {
+            const first = d.bests.find(isFinite);
+            if (first == null || first === 0) return [];
+            return d.bests.map((v, i) => isFinite(v) ? {
+                x: i,
+                y: d.asc ? (first - v) / Math.abs(first) * 100 : (v - first) / Math.abs(first) * 100,
+                label: `#${d.id} 第 ${i} 代`,
+            } : null).filter(Boolean);
+        }
+        const overlayChart = computed(() => {
+            if (!A.value || !B.value) return "";
+            return lineChartSVG([{
+                    name: "A 提升%",
+                    color: "#22d3ee",
+                    points: improveSeries(A.value)
+                },
+                {
+                    name: "B 提升%",
+                    color: "#f472b6",
+                    points: improveSeries(B.value)
+                },
+            ], {
+                yLabel: "相对首代提升 %",
+                xFormat: x => "第" + Math.round(x) + "代"
+            });
+        });
+        const chartA = computed(() => !A.value ? "" : lineChartSVG([{
+            name: "每代最优",
+            color: "#22d3ee",
+            points: A.value.bests.map((v, i) => ({
+                x: i,
+                y: v,
+                label: "第 " + i + " 代"
+            })).filter(p => p.y != null)
+        }]));
+        const chartB = computed(() => !B.value ? "" : lineChartSVG([{
+            name: "每代最优",
+            color: "#f472b6",
+            points: B.value.bests.map((v, i) => ({
+                x: i,
+                y: v,
+                label: "第 " + i + " 代"
+            })).filter(p => p.y != null)
+        }]));
+        const deltaRows = computed(() => {
+            if (!A.value || !B.value) return [];
+            const ascend = isAscend(A.value.sub.problem_key || A.value.inst?.problem_key);
+            const mk = (label, va, vb, fmt, better) => {
+                if (label === "适应度") better = ascend ? "low" : "high";
+                const na = va ?? null,
+                    nb = vb ?? null;
+                const dv = na != null && nb != null ? nb - na : null;
+                let cls = "";
+                if (dv != null && dv !== 0) cls = (better === "low" ? dv < 0 : dv > 0) ? "delta-up" : "delta-down";
+                return {
+                    label,
+                    va: fmt(na),
+                    vb: fmt(nb),
+                    dv: dv == null ? "—" : (dv > 0 ? "+" : "") + fmt(dv),
+                    cls
+                };
+            };
+            const heurN = d => d.gens.reduce((a, g) => a + (g.heuristics?.length ?? 0), 0);
+            return [
+                mk("适应度", A.value.sub.objective, B.value.sub.objective, fmtObj, "low"),
+                mk("所耗 token", A.value.sub.total_tokens, B.value.sub.total_tokens, fmtTokens, "low"),
+                mk("进化代数", A.value.gens.length, B.value.gens.length, v => String(v ?? "—"), "low"),
+                mk("种群个体总数", heurN(A.value), heurN(B.value), v => String(v ?? "—"), "low"),
+            ];
+        });
+        async function run() {
+            state.value = "loading";
+            err401.value = false;
+            try {
+                const [a, b] = await Promise.all([fetchOne(String(idA.value).trim()), fetchOne(String(idB.value).trim())]);
+                A.value = a;
+                B.value = b;
+                state.value = "done";
+            } catch (e) {
+                state.value = "err";
+                errMsg.value = e.message;
+                err401.value = e.status === 401;
+            }
+        }
+        return {
+            store,
+            recent,
+            idA,
+            idB,
+            pickA,
+            pickB,
+            state,
+            errMsg,
+            err401,
+            A,
+            B,
+            sameProblem,
+            overlayChart,
+            chartA,
+            chartB,
+            deltaRows,
+            run,
+            fmtObj,
+            fmtTokens,
+            fullName,
+            store: store
+        };
+    },
 };
 ROUTE_COMPS.compare = CompareView;

@@ -1,18 +1,43 @@
 /* ============ Vue 版视图：总览 / 排行榜 / 实时流 ============ */
 "use strict";
 
-const FW_CHIPS = [
-  { key: "ahg", label: "AHG 全部", types: ["eoh_nseh", "calm"] },
-  { key: "eoh_nseh", label: "EoH(NSEH)", types: ["eoh_nseh"] },
-  { key: "calm", label: "CALM", types: ["calm"] },
-  { key: "custom", label: "自定义", types: ["custom"] },
+const FW_CHIPS = [{
+        key: "ahg",
+        label: "AHG 全部",
+        types: ["eoh_nseh", "calm"]
+    },
+    {
+        key: "eoh_nseh",
+        label: "EoH(NSEH)",
+        types: ["eoh_nseh"]
+    },
+    {
+        key: "calm",
+        label: "CALM",
+        types: ["calm"]
+    },
+    {
+        key: "custom",
+        label: "自定义",
+        types: ["custom"]
+    },
 ];
-const SRC_CHIPS = [{ key: "api", label: "API" }, { key: "local", label: "本地LLM" }];
+const SRC_CHIPS = [{
+    key: "api",
+    label: "API"
+}, {
+    key: "local",
+    label: "本地LLM"
+}];
 
 /* ==================== 总览 ==================== */
 const DashboardView = {
-  components: { EmptyState, UserCell, FwBadge },
-  template: `
+    components: {
+        EmptyState,
+        UserCell,
+        FwBadge
+    },
+    template: `
   <div>
     <div class="grid cols-4">
       <div class="stat"><div class="k">参赛赛道</div><div class="v">{{ problems.length }}</div><div class="s">{{ trackNames }}</div></div>
@@ -63,50 +88,104 @@ const DashboardView = {
       </table></div>
     </div>
   </div>`,
-  setup() {
-    const recent = ref([]);
-    const rankings = ref([]);
-    onMounted(async () => {
-      recent.value = await api("/api/submissions/recent?limit=300").then(r => r.submissions ?? []).catch(() => []);
-      rankings.value = await Promise.all(store.problems.map(p =>
-        api(`/api/ranking/${p.key}`).then(r => ({ p, entries: r.entries ?? [] })).catch(() => ({ p, entries: [] }))));
-    });
-    const userCount = computed(() => {
-      const s = new Set();
-      for (const { entries } of rankings.value) for (const e of entries) if (e.user_id != null) s.add(e.user_id);
-      return s.size;
-    });
-    const sumTokens = computed(() =>
-      rankings.value.reduce((a, { entries }) => a + entries.reduce((x, e) => x + (Number(e.total_tokens) || 0), 0), 0));
-    const trackNames = computed(() => store.problems.map(p => p.name.split(" ")[0]).join(" / "));
-    const activitySVG = computed(() => {
-      const now = Date.now();
-      const buckets = [];
-      for (let i = 23; i >= 0; i--) buckets.push({ t: new Date(now - i * 3600e3), value: 0 });
-      for (const s of recent.value) {
-        const d = parseServerTime(s.created_at);
-        if (!d) continue;
-        const idx = buckets.findIndex(b => d >= b.t && d < new Date(b.t.getTime() + 3600e3));
-        if (idx >= 0) buckets[idx].value++;
-      }
-      return barChartSVG(buckets.map(b => ({ label: b.t.getHours() + "时", value: b.value, tip: b.t.toLocaleString("zh-CN", { hour: "2-digit" }) + ":00" })));
-    });
-    const srcDonut = computed(() => donutSVG([
-      { label: "API 模型", value: recent.value.filter(s => s.model_source === "api").length, color: "#fbbf24" },
-      { label: "本地 LLM", value: recent.value.filter(s => s.model_source === "local").length, color: "#22d3ee" },
-    ]));
-    const fwDonut = computed(() => donutSVG(["eoh_nseh", "calm", "custom"].map((ft, i) => ({
-      label: FW_LABEL[ft], value: recent.value.filter(s => s.framework_type === ft).length, color: PALETTE[i],
-    }))));
-    return { store, problems: computed(() => store.problems), recent, rankings, userCount, sumTokens, trackNames, activitySVG, srcDonut, fwDonut, openSubmissionDrawer, openUserDrawer, fmtObj, fmtTokens, fmtTime, fullName };
-  },
+    setup() {
+        const recent = ref([]);
+        const rankings = ref([]);
+        onMounted(async () => {
+            recent.value = await api("/api/submissions/recent?limit=300").then(r => r.submissions ?? []).catch(() => []);
+            rankings.value = await Promise.all(store.problems.map(p =>
+                api(`/api/ranking/${p.key}`).then(r => ({
+                    p,
+                    entries: r.entries ?? []
+                })).catch(() => ({
+                    p,
+                    entries: []
+                }))));
+        });
+        const userCount = computed(() => {
+            const s = new Set();
+            for (const {
+                    entries
+                }
+                of rankings.value)
+                for (const e of entries)
+                    if (e.user_id != null) s.add(e.user_id);
+            return s.size;
+        });
+        const sumTokens = computed(() =>
+            rankings.value.reduce((a, {
+                entries
+            }) => a + entries.reduce((x, e) => x + (Number(e.total_tokens) || 0), 0), 0));
+        const trackNames = computed(() => store.problems.map(p => p.name.split(" ")[0]).join(" / "));
+        const activitySVG = computed(() => {
+            const now = Date.now();
+            const buckets = [];
+            for (let i = 23; i >= 0; i--) buckets.push({
+                t: new Date(now - i * 3600e3),
+                value: 0
+            });
+            for (const s of recent.value) {
+                const d = parseServerTime(s.created_at);
+                if (!d) continue;
+                const idx = buckets.findIndex(b => d >= b.t && d < new Date(b.t.getTime() + 3600e3));
+                if (idx >= 0) buckets[idx].value++;
+            }
+            return barChartSVG(buckets.map(b => ({
+                label: b.t.getHours() + "时",
+                value: b.value,
+                tip: b.t.toLocaleString("zh-CN", {
+                    hour: "2-digit"
+                }) + ":00"
+            })));
+        });
+        const srcDonut = computed(() => donutSVG([{
+                label: "API 模型",
+                value: recent.value.filter(s => s.model_source === "api").length,
+                color: "#fbbf24"
+            },
+            {
+                label: "本地 LLM",
+                value: recent.value.filter(s => s.model_source === "local").length,
+                color: "#22d3ee"
+            },
+        ]));
+        const fwDonut = computed(() => donutSVG(["eoh_nseh", "calm", "custom"].map((ft, i) => ({
+            label: FW_LABEL[ft],
+            value: recent.value.filter(s => s.framework_type === ft).length,
+            color: PALETTE[i],
+        }))));
+        return {
+            store,
+            problems: computed(() => store.problems),
+            recent,
+            rankings,
+            userCount,
+            sumTokens,
+            trackNames,
+            activitySVG,
+            srcDonut,
+            fwDonut,
+            openSubmissionDrawer,
+            openUserDrawer,
+            fmtObj,
+            fmtTokens,
+            fmtTime,
+            fullName
+        };
+    },
 };
 ROUTE_COMPS.dashboard = DashboardView;
 
 /* ==================== 排行榜 ==================== */
 const LeaderboardView = {
-  components: { EmptyState, UserCell, FwBadge, SrcBadge, Medal },
-  template: `
+    components: {
+        EmptyState,
+        UserCell,
+        FwBadge,
+        SrcBadge,
+        Medal
+    },
+    template: `
   <div class="card">
     <h2>排行榜 <span class="tail">{{ meta }}</span></h2>
     <div class="toolbar">
@@ -155,74 +234,144 @@ const LeaderboardView = {
       </tbody>
     </table></div>
   </div>`,
-  setup(props) {
-    const fwChips = FW_CHIPS, srcChips = SRC_CHIPS;
-    const problemKey = ref(props.params.get("problem") || store.problems[0]?.key || "");
-    const fw = reactive(new Set()), src = reactive(new Set());
-    const sortBy = ref("score"), q = ref(""), barView = ref(false), auto = ref(false);
-    const entries = ref([]), ascend = ref(true), loading = ref(true), err = ref("");
-    let timer = null;
+    setup(props) {
+        const fwChips = FW_CHIPS,
+            srcChips = SRC_CHIPS;
+        const problemKey = ref(props.params.get("problem") || store.problems[0]?.key || "");
+        const fw = reactive(new Set()),
+            src = reactive(new Set());
+        const sortBy = ref("score"),
+            q = ref(""),
+            barView = ref(false),
+            auto = ref(false);
+        const entries = ref([]),
+            ascend = ref(true),
+            loading = ref(true),
+            err = ref("");
+        let timer = null;
 
-    async function load() {
-      loading.value = true; err.value = "";
-      const qs = new URLSearchParams();
-      const types = [...fw].flatMap(k => FW_CHIPS.find(c => c.key === k).types).join(",");
-      if (types) qs.set("framework_types", types);
-      const srcs = [...src].join(",");
-      if (srcs) qs.set("model_sources", srcs);
-      try {
-        const r = await api(`/api/ranking/${problemKey.value}${qs.toString() ? "?" + qs : ""}`);
-        entries.value = r.entries ?? []; ascend.value = r.ascend !== false;
-      } catch (e) { err.value = e.message; }
-      loading.value = false;
-    }
-    const visible = computed(() => {
-      let list = entries.value;
-      const qq = q.value.trim().toLowerCase();
-      if (qq) list = list.filter(e => (e.username || "").toLowerCase().includes(qq) || (e.display_name || "").toLowerCase().includes(qq));
-      if (sortBy.value === "time") list = [...list].sort((a, b) => (parseServerTime(b.best_submitted_at)?.getTime() ?? 0) - (parseServerTime(a.best_submitted_at)?.getTime() ?? 0));
-      else if (sortBy.value === "token") list = [...list].sort((a, b) => (b.total_tokens ?? -1) - (a.total_tokens ?? -1));
-      return list;
-    });
-    const meta = computed(() => `${visible.value.length} 人上榜 · 适应度${ascend.value ? "越小" : "越大"}越好${fw.size || src.size ? " · 已按筛选过滤" : ""}`);
-    const barHtml = computed(() => hbarListHTML(visible.value.slice(0, 15).map(e => ({
-      rank: e.rank, label: fullName(e), sub: `${e.username ?? ""} · ${FW_LABEL[e.framework_type] || "AHG"} · ${e.llm_model ?? ""}`,
-      value: Number(e.best_objective), fmt: fmtObj(e.best_objective), submissionId: e.submission_id, userId: e.user_id,
-    }))));
-    function toggleFw(k) { fw.has(k) ? fw.delete(k) : fw.add(k); load(); }
-    function toggleSrc(k) { src.has(k) ? src.delete(k) : src.add(k); load(); }
-    function toggleAuto() {
-      auto.value = !auto.value;
-      if (auto.value) timer = setInterval(load, 10000);
-      else { clearInterval(timer); timer = null; }
-    }
-    function exportCsv() {
-      const list = visible.value;
-      if (!list.length) { toast("没有可导出的数据", "err"); return; }
-      const head = "rank,user_id,username,display_name,framework_type,llm_model,model_source,best_objective,total_tokens,best_submitted_at,submission_id";
-      const lines = list.map(e => [e.rank, e.user_id, e.username, e.display_name, e.framework_type, e.llm_model, e.model_source, e.best_objective, e.total_tokens ?? "", e.best_submitted_at ?? "", e.submission_id ?? ""]
-        .map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","));
-      downloadText(`ranking_${problemKey.value}_${new Date().toISOString().slice(0, 10)}.csv`, [head, ...lines].join("\n"));
-      toast(`已导出 ${list.length} 条记录`, "ok");
-    }
-    watch(barHtml, () => nextTick(() => {
-      document.querySelectorAll(".hbar-row").forEach(row => {
-        row.style.cursor = "pointer";
-        row.onclick = () => { if (row.dataset.sid) openSubmissionDrawer(row.dataset.sid); else if (row.dataset.uid) openUserDrawer(row.dataset.uid); };
-      });
-    }));
-    onMounted(load);
-    onUnmounted(() => { if (timer) clearInterval(timer); });
-    return { store, fwChips, srcChips, problemKey, fw, src, sortBy, q, barView, auto, loading, err, visible, meta, barHtml, load, toggleFw, toggleSrc, toggleAuto, exportCsv, fmtObj, fmtTokens, fmtTime, fullName, navHash, openSubmissionDrawer };
-  },
-  props: ["params"],
+        async function load() {
+            loading.value = true;
+            err.value = "";
+            const qs = new URLSearchParams();
+            const types = [...fw].flatMap(k => FW_CHIPS.find(c => c.key === k).types).join(",");
+            if (types) qs.set("framework_types", types);
+            const srcs = [...src].join(",");
+            if (srcs) qs.set("model_sources", srcs);
+            try {
+                const r = await api(`/api/ranking/${problemKey.value}${qs.toString() ? "?" + qs : ""}`);
+                entries.value = r.entries ?? [];
+                ascend.value = r.ascend !== false;
+            } catch (e) {
+                err.value = e.message;
+            }
+            loading.value = false;
+        }
+        const visible = computed(() => {
+            let list = entries.value;
+            const qq = q.value.trim().toLowerCase();
+            if (qq) list = list.filter(e => (e.username || "").toLowerCase().includes(qq) || (e.display_name || "").toLowerCase().includes(qq));
+            if (sortBy.value === "time") list = [...list].sort((a, b) => (parseServerTime(b.best_submitted_at)?.getTime() ?? 0) - (parseServerTime(a.best_submitted_at)?.getTime() ?? 0));
+            else if (sortBy.value === "token") list = [...list].sort((a, b) => (b.total_tokens ?? -1) - (a.total_tokens ?? -1));
+            return list;
+        });
+        const meta = computed(() => `${visible.value.length} 人上榜 · 适应度${ascend.value ? "越小" : "越大"}越好${fw.size || src.size ? " · 已按筛选过滤" : ""}`);
+        const barHtml = computed(() => hbarListHTML(visible.value.slice(0, 15).map(e => ({
+            rank: e.rank,
+            label: fullName(e),
+            sub: `${e.username ?? ""} · ${FW_LABEL[e.framework_type] || "AHG"} · ${e.llm_model ?? ""}`,
+            value: Number(e.best_objective),
+            fmt: fmtObj(e.best_objective),
+            submissionId: e.submission_id,
+            userId: e.user_id,
+        }))));
+
+        function toggleFw(k) {
+            fw.has(k) ? fw.delete(k) : fw.add(k);
+            load();
+        }
+
+        function toggleSrc(k) {
+            src.has(k) ? src.delete(k) : src.add(k);
+            load();
+        }
+
+        function toggleAuto() {
+            auto.value = !auto.value;
+            if (auto.value) timer = setInterval(load, 10000);
+            else {
+                clearInterval(timer);
+                timer = null;
+            }
+        }
+
+        function exportCsv() {
+            const list = visible.value;
+            if (!list.length) {
+                toast("没有可导出的数据", "err");
+                return;
+            }
+            const head = "rank,user_id,username,display_name,framework_type,llm_model,model_source,best_objective,total_tokens,best_submitted_at,submission_id";
+            const lines = list.map(e => [e.rank, e.user_id, e.username, e.display_name, e.framework_type, e.llm_model, e.model_source, e.best_objective, e.total_tokens ?? "", e.best_submitted_at ?? "", e.submission_id ?? ""]
+                .map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","));
+            downloadText(`ranking_${problemKey.value}_${new Date().toISOString().slice(0, 10)}.csv`, [head, ...lines].join("\n"));
+            toast(`已导出 ${list.length} 条记录`, "ok");
+        }
+        watch(barHtml, () => nextTick(() => {
+            document.querySelectorAll(".hbar-row").forEach(row => {
+                row.style.cursor = "pointer";
+                row.onclick = () => {
+                    if (row.dataset.sid) openSubmissionDrawer(row.dataset.sid);
+                    else if (row.dataset.uid) openUserDrawer(row.dataset.uid);
+                };
+            });
+        }));
+        onMounted(load);
+        onUnmounted(() => {
+            if (timer) clearInterval(timer);
+        });
+        return {
+            store,
+            fwChips,
+            srcChips,
+            problemKey,
+            fw,
+            src,
+            sortBy,
+            q,
+            barView,
+            auto,
+            loading,
+            err,
+            visible,
+            meta,
+            barHtml,
+            load,
+            toggleFw,
+            toggleSrc,
+            toggleAuto,
+            exportCsv,
+            fmtObj,
+            fmtTokens,
+            fmtTime,
+            fullName,
+            navHash,
+            openSubmissionDrawer
+        };
+    },
+    props: ["params"],
 };
 ROUTE_COMPS.leaderboard = LeaderboardView;
 
 /* ==================== 实时流 ==================== */
 const LiveView = {
-  components: { EmptyState, UserCell, FwBadge, SrcBadge },
-  template: `
+    components: {
+        EmptyState,
+        UserCell,
+        FwBadge,
+        SrcBadge
+    },
+    template: `
   <div class="card">
     <h2>实时提交流 <span class="tail">全赛道 · 全用户 · 每 4 秒自动刷新 ·
       <button class="chip" :class="{ on: !paused }" style="padding:1px 10px" @click="paused = !paused">{{ paused ? "▶ 继续" : "⏸ 暂停" }}</button></span></h2>
@@ -260,42 +409,80 @@ const LiveView = {
       </tbody>
     </table></div>
   </div>`,
-  setup() {
-    const fwChips = FW_CHIPS, srcChips = SRC_CHIPS;
-    const problem = ref(""), sortBy = ref("time"), paused = ref(false);
-    const fw = reactive(new Set()), src = reactive(new Set());
-    const subs = ref([]), err = ref(""), freshIds = reactive(new Set());
-    async function load() {
-      const qs = new URLSearchParams({ limit: "60" });
-      if (problem.value) qs.set("problem_key", problem.value);
-      const types = [...fw].flatMap(k => FW_CHIPS.find(c => c.key === k).types).join(",");
-      if (types) qs.set("framework_types", types);
-      const srcs = [...src].join(",");
-      if (srcs) qs.set("model_sources", srcs);
-      try {
-        const list = (await api(`/api/submissions/recent?${qs}`)).submissions ?? [];
-        const fresh = new Set(list.map(s => s.id).filter(id => !seen.has(id)));
-        fresh.forEach(id => freshIds.add(id));
-        subs.value = list;
-        if (fresh.size) setTimeout(() => fresh.forEach(id => freshIds.delete(id)), 2500);
-        list.forEach(s => seen.add(s.id));
-        err.value = "";
-      } catch (e) { err.value = e.message; }
-    }
-    const seen = new Set();
-    const sorted = computed(() => {
-      let list = subs.value;
-      if (sortBy.value === "score") {
-        const asc = problem.value ? isAscend(problem.value) : true;
-        list = [...list].sort((a, b) => asc ? Number(a.objective) - Number(b.objective) : Number(b.objective) - Number(a.objective));
-      } else if (sortBy.value === "token") list = [...list].sort((a, b) => (b.total_tokens ?? -1) - (a.total_tokens ?? -1));
-      return list;
-    });
-    function toggleSet(set, k, cb) { set.has(k) ? set.delete(k) : set.add(k); cb(); }
-    let timer = null;
-    onMounted(() => { load(); timer = setInterval(() => { if (!paused.value) load(); }, 4000); });
-    onUnmounted(() => clearInterval(timer));
-    return { store, fwChips, srcChips, problem, sortBy, paused, fw, src, subs, err, freshIds, sorted, toggleSet, openSubmissionDrawer, fmtObj, fmtTokens, fmtTime, fullName };
-  },
+    setup() {
+        const fwChips = FW_CHIPS,
+            srcChips = SRC_CHIPS;
+        const problem = ref(""),
+            sortBy = ref("time"),
+            paused = ref(false);
+        const fw = reactive(new Set()),
+            src = reactive(new Set());
+        const subs = ref([]),
+            err = ref(""),
+            freshIds = reactive(new Set());
+        async function load() {
+            const qs = new URLSearchParams({
+                limit: "60"
+            });
+            if (problem.value) qs.set("problem_key", problem.value);
+            const types = [...fw].flatMap(k => FW_CHIPS.find(c => c.key === k).types).join(",");
+            if (types) qs.set("framework_types", types);
+            const srcs = [...src].join(",");
+            if (srcs) qs.set("model_sources", srcs);
+            try {
+                const list = (await api(`/api/submissions/recent?${qs}`)).submissions ?? [];
+                const fresh = new Set(list.map(s => s.id).filter(id => !seen.has(id)));
+                fresh.forEach(id => freshIds.add(id));
+                subs.value = list;
+                if (fresh.size) setTimeout(() => fresh.forEach(id => freshIds.delete(id)), 2500);
+                list.forEach(s => seen.add(s.id));
+                err.value = "";
+            } catch (e) {
+                err.value = e.message;
+            }
+        }
+        const seen = new Set();
+        const sorted = computed(() => {
+            let list = subs.value;
+            if (sortBy.value === "score") {
+                const asc = problem.value ? isAscend(problem.value) : true;
+                list = [...list].sort((a, b) => asc ? Number(a.objective) - Number(b.objective) : Number(b.objective) - Number(a.objective));
+            } else if (sortBy.value === "token") list = [...list].sort((a, b) => (b.total_tokens ?? -1) - (a.total_tokens ?? -1));
+            return list;
+        });
+
+        function toggleSet(set, k, cb) {
+            set.has(k) ? set.delete(k) : set.add(k);
+            cb();
+        }
+        let timer = null;
+        onMounted(() => {
+            load();
+            timer = setInterval(() => {
+                if (!paused.value) load();
+            }, 4000);
+        });
+        onUnmounted(() => clearInterval(timer));
+        return {
+            store,
+            fwChips,
+            srcChips,
+            problem,
+            sortBy,
+            paused,
+            fw,
+            src,
+            subs,
+            err,
+            freshIds,
+            sorted,
+            toggleSet,
+            openSubmissionDrawer,
+            fmtObj,
+            fmtTokens,
+            fmtTime,
+            fullName
+        };
+    },
 };
 ROUTE_COMPS.live = LiveView;

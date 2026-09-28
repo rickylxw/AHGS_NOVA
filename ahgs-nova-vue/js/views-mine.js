@@ -2,9 +2,14 @@
 "use strict";
 
 const MineView = {
-  components: { EmptyState, FwBadge, SrcBadge, Avatar },
-  props: ["params"],
-  template: `
+    components: {
+        EmptyState,
+        FwBadge,
+        SrcBadge,
+        Avatar
+    },
+    props: ["params"],
+    template: `
   <div v-if="!getToken() || !store.user" class="card">
     <EmptyState icon="🔐" desc="登录后可查看自己在各赛道的名次与全部提交记录" />
     <div style="text-align:center"><button class="btn primary" @click="store.loginModal = true">登录 / 注册</button></div>
@@ -121,113 +126,221 @@ const MineView = {
       </div>
     </div>
   </div>`,
-  props: ["params"],
-  setup(props) {
-    const tab = ref(["records", "instances", "profile"].includes(props.params.get("tab")) ? props.params.get("tab") : "records");
-    const recordsLoading = ref(true), instLoading = ref(true), profileLoading = ref(true);
-    const ranks = ref([]), mySubs = ref([]), instances = ref([]), runs = ref([]);
-    const me = ref({});
-    const pf = reactive({ displayName: "", email: "", phone: "" });
-    const pfMsg = ref(""), pfOk = ref(false), pfBusy = ref(false);
-    const pw = reactive({ old: "", nw: "", cfm: "" });
-    const pwMsg = ref(""), pwOk = ref(false), pwBusy = ref(false);
+    props: ["params"],
+    setup(props) {
+        const tab = ref(["records", "instances", "profile"].includes(props.params.get("tab")) ? props.params.get("tab") : "records");
+        const recordsLoading = ref(true),
+            instLoading = ref(true),
+            profileLoading = ref(true);
+        const ranks = ref([]),
+            mySubs = ref([]),
+            instances = ref([]),
+            runs = ref([]);
+        const me = ref({});
+        const pf = reactive({
+            displayName: "",
+            email: "",
+            phone: ""
+        });
+        const pfMsg = ref(""),
+            pfOk = ref(false),
+            pfBusy = ref(false);
+        const pw = reactive({
+            old: "",
+            nw: "",
+            cfm: ""
+        });
+        const pwMsg = ref(""),
+            pwOk = ref(false),
+            pwBusy = ref(false);
 
-    const rankMap = computed(() => new Map(ranks.value.map(e => [e.problem_key, e])));
-    const subsByProblem = computed(() => {
-      const m = {};
-      for (const s of mySubs.value) { (m[s.problem_key] ??= []).push(s); }
-      return m;
-    });
-    const problemKeys = computed(() => [...new Set([...rankMap.value.keys(), ...Object.keys(subsByProblem.value)])]);
-    const meta = computed(() => `${fullName(store.user)} · 共 ${mySubs.value.length} 次提交 · ${problemKeys.value.length} 个赛道`);
-    function sortedSubs(key) {
-      return (subsByProblem.value[key] ?? []).slice().sort((a, b) => (parseServerTime(b.created_at)?.getTime() ?? 0) - (parseServerTime(a.created_at)?.getTime() ?? 0));
-    }
-    function probName(key) { return (store.problems.find(p => p.key === key) || {}).name || key; }
-    function spark(subs) {
-      const vals = subs.slice().sort((a, b) => (parseServerTime(a.created_at)?.getTime() ?? 0) - (parseServerTime(b.created_at)?.getTime() ?? 0)).map(s => Number(s.objective)).filter(isFinite);
-      return sparklineSVG(vals);
-    }
-    onMounted(async () => {
-      if (tab.value === "instances") loadInstances();
-      else if (tab.value === "profile") loadProfile();
-      else loadRecords();
-    });
-    watch(tab, t => {
-      try { history.replaceState(null, "", "#/mine?tab=" + t); } catch {}
-      if (t === "instances") loadInstances();
-      else if (t === "profile") loadProfile();
-    });
-    watch(() => props.params.get("tab"), t => {
-      if (t && ["records", "instances", "profile"].includes(t) && t !== tab.value) tab.value = t;
-    });
-    async function loadRecords() {
-      recordsLoading.value = true;
-      const [r1, r2] = await Promise.all([
-        api("/api/ranking/me").then(r => r.entries ?? []).catch(() => []),
-        api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []),
-      ]);
-      ranks.value = r1; mySubs.value = r2; recordsLoading.value = false;
-    }
-    async function loadInstances() {
-      instLoading.value = true;
-      const [i, r] = await Promise.all([
-        api("/api/instances").then(r => r.instances ?? []).catch(() => []),
-        api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []),
-      ]);
-      instances.value = i; runs.value = r; instLoading.value = false;
-    }
-    async function loadProfile() {
-      profileLoading.value = true;
-      try {
-        me.value = await api("/api/auth/me");
-        setSession(null, me.value);
-        pf.displayName = me.value.display_name ?? "";
-        pf.email = me.value.email ?? "";
-        pf.phone = me.value.phone ?? "";
-      } catch (e) { me.value = getStoredUser() ?? {}; }
-      profileLoading.value = false;
-    }
-    async function uploadAvatar(ev) {
-      const f = ev.target.files?.[0];
-      ev.target.value = "";
-      if (!f) return;
-      if (!f.type.startsWith("image/")) { toast("请选择图片文件", "err"); return; }
-      const rd = new FileReader();
-      rd.onload = async () => {
-        try {
-          const u = await api("/api/auth/me", { method: "PATCH", body: { avatar: rd.result } });
-          setSession(null, u);
-          toast("头像已更新", "ok");
-          loadProfile();
-        } catch (e) { toast("头像更新失败：" + e.message, "err"); }
-      };
-      rd.readAsDataURL(f);
-    }
-    async function saveProfile() {
-      pfMsg.value = ""; pfBusy.value = true;
-      try {
-        const u = await api("/api/auth/me", { method: "PATCH", body: { display_name: pf.displayName.trim(), email: pf.email.trim(), phone: pf.phone.trim() } });
-        setSession(null, u);
-        pfOk.value = true; pfMsg.value = "已保存";
-        toast("资料已保存", "ok");
-      } catch (e) { pfOk.value = false; pfMsg.value = e.message; }
-      finally { pfBusy.value = false; }
-    }
-    async function savePassword() {
-      pwMsg.value = "";
-      if (!pw.old || !pw.nw || !pw.cfm) { pwMsg.value = "请填写完整的密码信息"; return; }
-      if (pw.nw !== pw.cfm) { pwMsg.value = "两次输入的新密码不一致"; return; }
-      pwBusy.value = true;
-      try {
-        await api("/api/auth/me/password", { method: "POST", body: { old_password: pw.old, new_password: pw.nw, confirm_password: pw.cfm } });
-        pwOk.value = true; pwMsg.value = "密码修改成功";
-        pw.old = pw.nw = pw.cfm = "";
-        toast("密码已修改", "ok");
-      } catch (e) { pwOk.value = false; pwMsg.value = e.message; }
-      finally { pwBusy.value = false; }
-    }
-    return { store, getToken, tab, recordsLoading, instLoading, profileLoading, rankMap, subsByProblem, problemKeys, meta, sortedSubs, probName, spark, instances, runs, me, pf, pfMsg, pfOk, pfBusy, pw, pwMsg, pwOk, pwBusy, saveProfile, savePassword, uploadAvatar, openSubmissionDrawer, navHash, statusName: s => STATUS_LABEL[s] ?? s ?? "—", fmtObj, fmtTokens, fmtTime, fullName };
-  },
+        const rankMap = computed(() => new Map(ranks.value.map(e => [e.problem_key, e])));
+        const subsByProblem = computed(() => {
+            const m = {};
+            for (const s of mySubs.value) {
+                (m[s.problem_key] ??= []).push(s);
+            }
+            return m;
+        });
+        const problemKeys = computed(() => [...new Set([...rankMap.value.keys(), ...Object.keys(subsByProblem.value)])]);
+        const meta = computed(() => `${fullName(store.user)} · 共 ${mySubs.value.length} 次提交 · ${problemKeys.value.length} 个赛道`);
+
+        function sortedSubs(key) {
+            return (subsByProblem.value[key] ?? []).slice().sort((a, b) => (parseServerTime(b.created_at)?.getTime() ?? 0) - (parseServerTime(a.created_at)?.getTime() ?? 0));
+        }
+
+        function probName(key) {
+            return (store.problems.find(p => p.key === key) || {}).name || key;
+        }
+
+        function spark(subs) {
+            const vals = subs.slice().sort((a, b) => (parseServerTime(a.created_at)?.getTime() ?? 0) - (parseServerTime(b.created_at)?.getTime() ?? 0)).map(s => Number(s.objective)).filter(isFinite);
+            return sparklineSVG(vals);
+        }
+        onMounted(async () => {
+            if (tab.value === "instances") loadInstances();
+            else if (tab.value === "profile") loadProfile();
+            else loadRecords();
+        });
+        watch(tab, t => {
+            try {
+                history.replaceState(null, "", "#/mine?tab=" + t);
+            } catch {}
+            if (t === "instances") loadInstances();
+            else if (t === "profile") loadProfile();
+        });
+        watch(() => props.params.get("tab"), t => {
+            if (t && ["records", "instances", "profile"].includes(t) && t !== tab.value) tab.value = t;
+        });
+        async function loadRecords() {
+            recordsLoading.value = true;
+            const [r1, r2] = await Promise.all([
+                api("/api/ranking/me").then(r => r.entries ?? []).catch(() => []),
+                api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []),
+            ]);
+            ranks.value = r1;
+            mySubs.value = r2;
+            recordsLoading.value = false;
+        }
+        async function loadInstances() {
+            instLoading.value = true;
+            const [i, r] = await Promise.all([
+                api("/api/instances").then(r => r.instances ?? []).catch(() => []),
+                api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []),
+            ]);
+            instances.value = i;
+            runs.value = r;
+            instLoading.value = false;
+        }
+        async function loadProfile() {
+            profileLoading.value = true;
+            try {
+                me.value = await api("/api/auth/me");
+                setSession(null, me.value);
+                pf.displayName = me.value.display_name ?? "";
+                pf.email = me.value.email ?? "";
+                pf.phone = me.value.phone ?? "";
+            } catch (e) {
+                me.value = getStoredUser() ?? {};
+            }
+            profileLoading.value = false;
+        }
+        async function uploadAvatar(ev) {
+            const f = ev.target.files?.[0];
+            ev.target.value = "";
+            if (!f) return;
+            if (!f.type.startsWith("image/")) {
+                toast("请选择图片文件", "err");
+                return;
+            }
+            const rd = new FileReader();
+            rd.onload = async () => {
+                try {
+                    const u = await api("/api/auth/me", {
+                        method: "PATCH",
+                        body: {
+                            avatar: rd.result
+                        }
+                    });
+                    setSession(null, u);
+                    toast("头像已更新", "ok");
+                    loadProfile();
+                } catch (e) {
+                    toast("头像更新失败：" + e.message, "err");
+                }
+            };
+            rd.readAsDataURL(f);
+        }
+        async function saveProfile() {
+            pfMsg.value = "";
+            pfBusy.value = true;
+            try {
+                const u = await api("/api/auth/me", {
+                    method: "PATCH",
+                    body: {
+                        display_name: pf.displayName.trim(),
+                        email: pf.email.trim(),
+                        phone: pf.phone.trim()
+                    }
+                });
+                setSession(null, u);
+                pfOk.value = true;
+                pfMsg.value = "已保存";
+                toast("资料已保存", "ok");
+            } catch (e) {
+                pfOk.value = false;
+                pfMsg.value = e.message;
+            } finally {
+                pfBusy.value = false;
+            }
+        }
+        async function savePassword() {
+            pwMsg.value = "";
+            if (!pw.old || !pw.nw || !pw.cfm) {
+                pwMsg.value = "请填写完整的密码信息";
+                return;
+            }
+            if (pw.nw !== pw.cfm) {
+                pwMsg.value = "两次输入的新密码不一致";
+                return;
+            }
+            pwBusy.value = true;
+            try {
+                await api("/api/auth/me/password", {
+                    method: "POST",
+                    body: {
+                        old_password: pw.old,
+                        new_password: pw.nw,
+                        confirm_password: pw.cfm
+                    }
+                });
+                pwOk.value = true;
+                pwMsg.value = "密码修改成功";
+                pw.old = pw.nw = pw.cfm = "";
+                toast("密码已修改", "ok");
+            } catch (e) {
+                pwOk.value = false;
+                pwMsg.value = e.message;
+            } finally {
+                pwBusy.value = false;
+            }
+        }
+        return {
+            store,
+            getToken,
+            tab,
+            recordsLoading,
+            instLoading,
+            profileLoading,
+            rankMap,
+            subsByProblem,
+            problemKeys,
+            meta,
+            sortedSubs,
+            probName,
+            spark,
+            instances,
+            runs,
+            me,
+            pf,
+            pfMsg,
+            pfOk,
+            pfBusy,
+            pw,
+            pwMsg,
+            pwOk,
+            pwBusy,
+            saveProfile,
+            savePassword,
+            uploadAvatar,
+            openSubmissionDrawer,
+            navHash,
+            statusName: s => STATUS_LABEL[s] ?? s ?? "—",
+            fmtObj,
+            fmtTokens,
+            fmtTime,
+            fullName
+        };
+    },
 };
 ROUTE_COMPS.mine = MineView;
