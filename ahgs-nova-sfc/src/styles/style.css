@@ -1271,21 +1271,37 @@ th.num {
 }
 
 #footer {
-    border-top: 1px solid var(--border);
     padding: 14px 22px;
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 10px;
-    color: var(--text-faint);
+    color: var(--text-dim);
     font-size: 12.5px;
+    background: linear-gradient(180deg, var(--bg-soft), var(--bg));
+    position: relative;
+}
+
+#footer::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    background: var(--accent-grad);
+    opacity: .3;
 }
 
 #footer span:nth-child(3) {
     text-align: right;
 }
 
+#footer a {
+    color: var(--accent);
+    font-weight: 600;
+}
+
 #footer a:hover {
+    color: var(--text);
     text-decoration: underline;
 }
 
