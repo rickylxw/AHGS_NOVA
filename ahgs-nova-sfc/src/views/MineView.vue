@@ -403,7 +403,8 @@ async function savePassword() {
                             · 最优 <b class="mono">{{ fmtObj(rankMap.get(key).best_objective) }}</b>
                         </span>
                         <span v-else class="hint">暂无名次</span>
-                        <span v-if="(subsByProblem[key] || []).length > 1" title="我的提交适应度走势（时间序）">
+                        <span v-if="(subsByProblem[key] || []).length > 1" class="head-spark"
+                            title="我的提交适应度走势（时间序）">
                             <span><Sparkline :values="subSpark(key)" /></span></span>
                         <a class="btn small" style="margin-left: auto" :href="'#/leaderboard?problem=' + key"
                             title="查看该赛道完整排行榜">完整榜 →</a>

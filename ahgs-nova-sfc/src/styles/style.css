@@ -282,6 +282,8 @@ textarea {
     letter-spacing: .04em;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    row-gap: 2px;
     gap: 8px;
 }
 
@@ -320,9 +322,13 @@ textarea {
 @media (max-width: 640px) {
 
     .grid.cols-2,
-    .grid.cols-3,
-    .grid.cols-4 {
+    .grid.cols-3 {
         grid-template-columns: 1fr;
+    }
+
+    /* 窄屏下 4 列小卡保持两列，避免竖排过长 */
+    .grid.cols-4 {
+        grid-template-columns: 1fr 1fr;
     }
 }
 
@@ -469,6 +475,35 @@ textarea {
 /* ============ 表格 ============ */
 .table-wrap {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 窄屏下的表格与工具条适配（表格保留全部列，横向滚动查看） */
+@media (max-width: 640px) {
+    /* 筛选工具条每个字段独占一行，避免挤压与错位空隙 */
+    .toolbar {
+        align-items: stretch;
+    }
+
+    .toolbar .field {
+        flex-basis: 100%;
+    }
+
+    /* 卡片标题的说明文字换到标题下一行，避免标题被挤成竖排 */
+    .card h2 .tail {
+        flex-basis: 100%;
+        margin-left: 0;
+    }
+
+    /* 奖台三人卡片在窄屏竖排，避免名字与数值互相挤压 */
+    .podium {
+        flex-direction: column;
+    }
+
+    /* 赛道详情头部的迷你走势图在窄屏省略 */
+    .track-section .mine-head .head-spark {
+        display: none;
+    }
 }
 
 table {
@@ -492,6 +527,8 @@ td {
     padding: 9px 10px;
     border-bottom: 1px solid var(--border);
     vertical-align: middle;
+    /* 窄屏横向滚动时避免单元格文字竖排折行 */
+    white-space: nowrap;
 }
 
 tbody tr:last-child td {
@@ -876,6 +913,13 @@ th.num {
 
 .podium-item .who {
     font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 奖台内用户名过长时省略，避免挤压相邻卡片 */
+.podium-item .u-main {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1400,6 +1444,8 @@ th.num {
 .mine-head {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    row-gap: 6px;
     gap: 10px;
     margin: 18px 0 8px;
 }
@@ -1451,6 +1497,17 @@ th.num {
     gap: 8px;
     align-items: center;
     flex-wrap: wrap;
+}
+
+/* 弹性下拉：宽度归零后由 flex 分配，避免长选项把窄屏栅格撑破 */
+.picker-row .input.grow {
+    width: 0;
+    min-width: 0;
+}
+
+/* 网格子项允许收缩，防止内容最小宽度把 1fr 轨道撑破（窄屏单列时尤其明显） */
+.vs-grid>* {
+    min-width: 0;
 }
 
 .picker-row .input {
@@ -1516,12 +1573,43 @@ th.num {
         font-size: 15px;
     }
 
+    /* 触屏友好：加大点击目标，输入 ≥16px 避免 iOS 聚焦自动放大 */
+    .icon-btn {
+        width: 38px;
+        height: 38px;
+    }
+
+    .chip {
+        padding: 7px 14px;
+    }
+
+    .btn.small {
+        padding: 6px 12px;
+    }
+
+    .field input,
+    .field select,
+    .input {
+        font-size: 16px;
+    }
+
     .vs-grid {
         grid-template-columns: 1fr;
     }
 
     .vs-mid {
         padding: 4px 0;
+    }
+}
+
+/* 极窄屏：顶栏只留头像（昵称在用户菜单里仍可见），保证汉堡按钮同行 */
+@media (max-width: 480px) {
+    .user-chip {
+        padding: 4px;
+    }
+
+    .user-chip b {
+        display: none;
     }
 }
 

@@ -145,7 +145,7 @@ async function run() {
                     <label>提交 A</label>
                     <div class="picker-row">
                         <input class="input" v-model="idA" placeholder="提交 ID" style="max-width: 110px" />
-                        <select class="input" v-model="pickA" style="flex: 1">
+                        <select class="input grow" v-model="pickA" style="flex: 1">
                             <option value="">— 从最近提交选择 —</option>
                             <option v-for="s in recent" :key="s.id" :value="String(s.id)">#{{ s.id }} · {{ fullName(s) }}
                                 · {{ s.problem_name || s.problem_key }} · {{ fmtObj(s.objective) }}</option>
@@ -157,7 +157,7 @@ async function run() {
                     <label>提交 B</label>
                     <div class="picker-row">
                         <input class="input" v-model="idB" placeholder="提交 ID" style="max-width: 110px" />
-                        <select class="input" v-model="pickB" style="flex: 1">
+                        <select class="input grow" v-model="pickB" style="flex: 1">
                             <option value="">— 从最近提交选择 —</option>
                             <option v-for="s in recent" :key="s.id" :value="String(s.id)">#{{ s.id }} · {{ fullName(s) }}
                                 · {{ s.problem_name || s.problem_key }} · {{ fmtObj(s.objective) }}</option>
