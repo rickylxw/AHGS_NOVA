@@ -58,3 +58,9 @@ export function isAscend(problemKey) {
     const p = (store.problems || []).find(p => p.key === problemKey);
     return !p || p.ascend !== false;
 }
+
+/** 完整精度原始数值（悬停提示用）：fmtObj 只显示 4 位小数，这里保留全部有效位 */
+export function fullNum(x) {
+    const n = Number(x);
+    return x == null || x === "" || !isFinite(n) ? "—" : String(n);
+}

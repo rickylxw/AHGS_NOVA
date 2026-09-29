@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api, getToken } from "../lib/api";
 import { STATUS_ACTIVE, STATUS_LABEL } from "../lib/constants";
 import { store, toast, openHeurDrawer } from "../lib/store";
-import { fmtObj, fmtTokens, fmtTime, fullName, isAscend } from "../lib/format";
+import { fmtObj, fmtTokens, fmtTime, fullName, isAscend, fullNum } from "../lib/format";
 import LineChart from "../charts/LineChart.vue";
 import BarChart from "../charts/BarChart.vue";
 import KeywordInsight from "../components/KeywordInsight.vue";
@@ -624,7 +624,7 @@ function genHint(g, gi) {
                 <div class="grid cols-4" style="margin-top: 10px">
                     <div class="stat">
                         <div class="k">最优适应度</div>
-                        <div class="v mono">{{ fmtObj(status.best_objective) }}</div>
+                        <div class="v mono" :title="'完整值：' + fullNum(status.best_objective)">{{ fmtObj(status.best_objective) }}</div>
                         <div class="s">{{ popAsc ? "越小越好" : "越大越好" }} · {{ problemLabel }}</div>
                     </div>
                     <div class="stat">
@@ -651,9 +651,9 @@ function genHint(g, gi) {
                 <div v-if="mineCompare" class="card vs-mine-card">
                     <span class="vs-mine-ico">🎯</span>
                     <span>与个人最优：</span>
-                    <span class="mono" style="font-weight: 800">{{ fmtObj(mineCompare.cur) }}</span>
+                    <span class="mono" style="font-weight: 800" :title="'完整值：' + fullNum(mineCompare.cur)">{{ fmtObj(mineCompare.cur) }}</span>
                     <span class="hint">vs 我的最好</span>
-                    <span class="mono">{{ fmtObj(mineCompare.myBest) }}</span>
+                    <span class="mono" :title="'完整值：' + fullNum(mineCompare.myBest)">{{ fmtObj(mineCompare.myBest) }}</span>
                     <span v-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
                     <span v-else class="delta-down">距个人最优 +{{ mineCompare.deltaPct.toFixed(2) }}%（当前第 {{ mineCompare.rank }} 名）</span>
                 </div>
@@ -773,7 +773,7 @@ function genHint(g, gi) {
                 <div class="grid cols-4">
                     <div class="stat">
                         <div class="k">最终最优适应度</div>
-                        <div class="v mono">{{ fmtObj(subObjective) }}</div>
+                        <div class="v mono" :title="'完整值：' + fullNum(subObjective)">{{ fmtObj(subObjective) }}</div>
                         <div class="s">{{ asc ? "越小越好" : "越大越好" }} · {{ problemLabel }}</div>
                     </div>
                     <div class="stat">
@@ -805,9 +805,9 @@ function genHint(g, gi) {
                     <div v-if="mineCompare" class="card vs-mine-card">
                         <span class="vs-mine-ico">🎯</span>
                         <span>与个人最优：</span>
-                        <span class="mono" style="font-weight: 800">{{ fmtObj(mineCompare.cur) }}</span>
+                        <span class="mono" style="font-weight: 800" :title="'完整值：' + fullNum(mineCompare.cur)">{{ fmtObj(mineCompare.cur) }}</span>
                         <span class="hint">vs 我的最好</span>
-                        <span class="mono">{{ fmtObj(mineCompare.myBest) }}</span>
+                        <span class="mono" :title="'完整值：' + fullNum(mineCompare.myBest)">{{ fmtObj(mineCompare.myBest) }}</span>
                         <span v-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
                         <span v-else class="delta-down">距个人最优 +{{ mineCompare.deltaPct.toFixed(2) }}%（当前第 {{ mineCompare.rank }} 名）</span>
                     </div>

@@ -72,7 +72,7 @@ const drawnSeries = computed(() => {
                 dots: pv.map(p => ({
                     cx: X(p.x).toFixed(1),
                     cy: Y(p.y).toFixed(1),
-                    tip: (p.label ?? p.x) + "：" + fmtTick(p.y),
+                    tip: (p.label ?? p.x) + "：" + fmtTick(p.y) + (p.y != null && String(p.y) !== fmtTick(p.y) ? "（完整值 " + String(p.y) + "）" : ""),
                 })),
             };
         })

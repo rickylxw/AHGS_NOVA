@@ -56,7 +56,7 @@ const bars = computed(() => {
             h: h.toFixed(1),
             fill: it.color || `url(#${gradId})`,
             opacity: v ? 0.92 : 0.15,
-            tip: (it.tip ?? it.label) + "：" + fmtTick(v),
+            tip: (it.tip ?? it.label) + "：" + fmtTick(v) + (String(v) !== fmtTick(v) ? "（完整值 " + String(v) + "）" : ""),
             showLabel: props.items.length <= 14 || i % Math.ceil(props.items.length / 12) === 0,
             labelX: (x + w / 2).toFixed(1),
             label: it.label,

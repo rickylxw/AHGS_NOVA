@@ -404,7 +404,7 @@ async function savePassword() {
                             <span class="rank-pill" :class="rankCls(rankMap.get(key).rank)"><template
                                     v-if="rankMap.get(key).rank <= 3">{{ ["🥇", "🥈", "🥉"][rankMap.get(key).rank - 1]
                                     }}</template>第 <b class="mono">{{ rankMap.get(key).rank }}</b> 名</span>
-                            · 最优 <b class="mono">{{ fmtObj(rankMap.get(key).best_objective) }}</b>
+                            · 最优 <b class="mono" :title="'完整值：' + fullNum(rankMap.get(key).best_objective)">{{ fmtObj(rankMap.get(key).best_objective) }}</b>
                         </span>
                         <span v-else class="hint">暂无名次</span>
                         <span v-if="(subsByProblem[key] || []).length > 1" class="head-spark"
