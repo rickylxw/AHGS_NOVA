@@ -59,7 +59,7 @@ src/
   theme across the three — sync any change to the other copies).
 - Empty/loading states: reuse `EmptyState.vue` and `.loading-row` + `.spinner`.
 
-## Template pitfalls (they leak into the rendered DOM)
+## Template pitfalls (they leak into the rendered DOM or break handlers)
 
 - Keep text interpolation on the same line as its parent tag: `<div>{{ msg }}</div>`. Line breaks make Vue's
   whitespace condensing emit an extra leading-space text node.
@@ -67,6 +67,10 @@ src/
   flattening into per-element `v-for` loops when possible.
 - Only declared props are kept off the root element (e.g. `params`); undeclared ones appear in the DOM as
   `params=""` fallthrough attributes.
+- **Never use non-whitelisted globals in template expressions** (e.g. `@click="navHash('curve', new
+  URLSearchParams({ id }))"`): the compiler prefixes unknown identifiers with `_ctx.`, so the handler throws
+  `TypeError: _ctx.URLSearchParams is not a constructor` at click time — silently in prod builds. Build query
+  params in script helpers instead (see `navToCurve()` in `lib/router.js`).
 
 ## Parity with the older editions (regression verification)
 

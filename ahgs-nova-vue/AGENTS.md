@@ -43,8 +43,12 @@ python server.py [port]   # serves this folder; page fetches the remote AHGS API
 
 ## Known defects (already fixed in the SFC edition — do not copy from here)
 
-- `views-mine.js`: the per-track records section has a duplicated nested `v-for` container, rendering each
+- views-mine.js: the per-track records section has a duplicated nested `v-for` container, rendering each
   track section twice. If touching that block, collapse it to a single `v-for`.
-- `views-curve.js`: `loadSource()` calls `history.replaceState(...)`, but a same-scope computed named
+- views-curve.js: `loadSource()` calls `history.replaceState(...)`, but a same-scope computed named
   `history` shadows the global — selecting a run from the dropdown throws. Use
   `window.history.replaceState`.
+- Templates that call `new URLSearchParams(...)` inline (e.g. the 曲线/分析 buttons in views-mine.js,
+  views-rank.js) throw `TypeError: _ctx.URLSearchParams is not a constructor` at click time — the template
+  compiler prefixes the identifier with `_ctx.`. Move query-param construction into script helpers
+  (pattern: `navToCurve()` in `../ahgs-nova-sfc/src/lib/router.js`).

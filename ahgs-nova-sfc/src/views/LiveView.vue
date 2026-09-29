@@ -75,6 +75,12 @@ function toggleSet(set, k) {
     load();
 }
 
+/** 「只看我的」与按用户过滤互斥：开启时清空并禁用用户输入框 */
+function toggleMine() {
+    mineOnly.value = !mineOnly.value;
+    if (mineOnly.value) q.value = "";
+}
+
 onMounted(() => {
     load();
     timer = setInterval(() => {
@@ -115,13 +121,13 @@ onUnmounted(() => clearInterval(timer));
             </div>
             <div class="field" style="min-width: 150px">
                 <label>按用户过滤</label>
-                <input v-model="q" placeholder="用户名 / 昵称" />
+                <input v-model="q" :disabled="mineOnly" :placeholder="mineOnly ? '「只看我的」已开启' : '用户名 / 昵称'" />
             </div>
             <div class="field">
                 <label>&nbsp;</label>
                 <div class="chip-row">
                     <button class="chip" :class="{ on: mineOnly }" :disabled="!store.user"
-                        :title="store.user ? '只看我的提交' : '登录后可用'" @click="mineOnly = !mineOnly">🙋 只看我的</button>
+                        :title="store.user ? '只看我的提交' : '登录后可用'" @click="toggleMine">🙋 只看我的</button>
                 </div>
             </div>
             <div class="field" style="min-width: 160px">
