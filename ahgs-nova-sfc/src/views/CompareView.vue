@@ -21,8 +21,8 @@ const err401 = ref(false);
 const A = ref(null);
 const B = ref(null);
 
-onMounted(() => {
-    recent.value = api("/api/submissions/recent?limit=50")
+onMounted(async () => {
+    recent.value = await api("/api/submissions/recent?limit=50")
         .then(r => r.submissions ?? [])
         .catch(() => []);
 });

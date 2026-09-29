@@ -301,12 +301,12 @@ async function savePassword() {
                 </details>
                 <div v-for="key in problemKeys" :key="key" :id="'sec-' + key">
                     <div class="mine-head">
-                        <span class="mine-title">{{ rankMap[key]?.problem_name || probName(key) }}</span>
-                        <span v-if="rankMap[key]" class="mine-rank">
-                            <template v-if="rankMap[key].rank <= 3">{{ ["🥇", "🥈", "🥉"][rankMap[key].rank - 1]
+                        <span class="mine-title">{{ rankMap.get(key)?.problem_name || probName(key) }}</span>
+                        <span v-if="rankMap.get(key)" class="mine-rank">
+                            <template v-if="rankMap.get(key).rank <= 3">{{ ["🥇", "🥈", "🥉"][rankMap.get(key).rank - 1]
                             }}</template>
-                            第 <b class="mono">{{ rankMap[key].rank }}</b> 名 · 最优 <b class="mono">{{
-                                fmtObj(rankMap[key].best_objective) }}</b>
+                            第 <b class="mono">{{ rankMap.get(key).rank }}</b> 名 · 最优 <b class="mono">{{
+                                fmtObj(rankMap.get(key).best_objective) }}</b>
                         </span>
                         <span v-else class="hint">暂无名次</span>
                         <span v-if="(subsByProblem[key] || []).length > 1" title="我的提交适应度走势（时间序）">
