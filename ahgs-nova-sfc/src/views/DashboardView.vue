@@ -33,6 +33,21 @@ const userCount = computed(() => {
         for (const e of entries) if (e.user_id != null) s.add(e.user_id);
     return s.size;
 });
+
+/* ---------- 当前用户在赛道前三中的高亮 ---------- */
+const myId = computed(() => store.user?.id ?? null);
+
+function isMe(e) {
+    return myId.value != null && e.user_id === myId.value;
+}
+
+/** 当前用户在该赛道前三的名次；不在则返回 null */
+function myTopRank(r) {
+    if (myId.value == null) return null;
+    const e = r.entries.slice(0, 3).find(e => e.user_id === myId.value);
+    return e ? e.rank : null;
+}
+
 const sumTokens = computed(() =>
     rankings.value.reduce((a, { entries }) => a + entries.reduce((x, e) => x + (Number(e.total_tokens) || 0), 0), 0)
 );
@@ -117,17 +132,22 @@ const fwSegments = computed(() =>
             <div class="grid cols-2">
                 <div class="podium-item-card" v-for="r in rankings" :key="r.p.key">
                     <div class="mine-head" style="margin: 0 0 8px"><span class="mine-title">{{ r.p.name }}</span>
+                        <span v-if="myTopRank(r)" class="badge me-badge">🏆 我在第 {{ myTopRank(r) }} 名</span>
                         <a class="hint" :href="'#/leaderboard?problem=' + r.p.key">查看完整榜 →</a>
                     </div>
                     <div v-if="r.entries.length" class="podium">
-                        <div v-for="e in r.entries.slice(0, 3)" :key="e.rank" class="podium-item" :class="'p' + e.rank">
+                        <div v-for="e in r.entries.slice(0, 3)" :key="e.rank" class="podium-item"
+                            :class="['p' + e.rank, { me: isMe(e) }]">
                             <div class="user-cell" style="min-width: 0">
                                 <span class="link-ish" @click="openUserDrawer(e.user_id)"><Avatar :user="e" /></span>
                                 <div class="u-name"><span class="u-main" style="font-size: 13.5px">{{ fullName(e)
                                     }}</span></div>
                             </div>
                             <div class="obj mono">{{ fmtObj(e.best_objective) }}</div>
-                            <FwBadge :ft="e.framework_type" />
+                            <div class="podium-tags">
+                                <FwBadge :ft="e.framework_type" />
+                                <span v-if="isMe(e)" class="badge me-badge">我</span>
+                            </div>
                         </div>
                     </div>
                     <div v-else class="hint">暂无参赛记录</div>

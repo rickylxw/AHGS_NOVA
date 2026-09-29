@@ -973,6 +973,32 @@ th.num {
     padding: 12px 14px;
 }
 
+/* 各赛道前三：高亮当前用户 */
+.podium-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.badge.me-badge {
+    color: var(--accent);
+    background: rgba(34, 211, 238, .13);
+    border-color: rgba(34, 211, 238, .45);
+}
+
+.podium-item.me {
+    border-color: var(--accent);
+    background:
+        linear-gradient(180deg, rgba(34, 211, 238, .08), transparent 65%),
+        var(--card-2);
+    box-shadow: inset 0 0 20px rgba(34, 211, 238, .08);
+}
+
+.podium-item.me .obj {
+    color: var(--accent);
+}
+
 /* 对比 */
 .vs-grid {
     display: grid;
