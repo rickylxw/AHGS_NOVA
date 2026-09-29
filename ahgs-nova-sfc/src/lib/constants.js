@@ -44,3 +44,6 @@ export const EVO_DEFAULTS = {
 };
 
 export const PALETTE = ["#22d3ee", "#a78bfa", "#f472b6", "#34d399", "#fbbf24", "#60a5fa", "#fb7185", "#4ade80"];
+
+/** 前端仓库地址（反馈入口 / 页脚链接） */
+export const REPO_URL = "https://github.com/rickylxw/AHGS_NOVA";

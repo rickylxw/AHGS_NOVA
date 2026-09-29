@@ -13,12 +13,14 @@ import DrawerHost from "./components/drawers/DrawerHost.vue";
 const ready = ref(false);
 const bootErr = ref("");
 const settingsOpen = ref(false);
+const feedbackOpen = ref(false);
 const userMenuOpen = ref(false);
 const navOpen = ref(false);
 const apiInput = ref(apiBase());
 const apiMsg = ref("");
 const year = new Date().getFullYear();
 const REPO_URL = "https://github.com/rickylxw/AHGS_NOVA";
+import FeedbackModal from "./components/FeedbackModal.vue";
 
 const navItems = [
     { name: "dashboard", label: "总览" },
@@ -135,6 +137,7 @@ const onKey = ev => {
         closeDrawer();
         store.loginModal = false;
         settingsOpen.value = false;
+            feedbackOpen.value = false;
         userMenuOpen.value = false;
         navOpen.value = false;
     }
@@ -189,6 +192,12 @@ onUnmounted(() => {
                     <circle cx="12" cy="12" r="3" />
                     <path
                         d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+            </button>
+            <button class="icon-btn" title="问题反馈 / 建议" @click="feedbackOpen = true">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
                 </svg>
             </button>
             <button class="icon-btn" title="切换主题" @click="toggleTheme">
@@ -263,13 +272,15 @@ onUnmounted(() => {
     <footer id="footer">
         <span>AHGS NOVA · Vue SFC 版 {{ APP_VERSION }} · 基于平台公开接口构建</span>
         <span>© {{ year }} Rickylxw, Midairlogn ·
-            <a :href="REPO_URL" target="_blank" rel="noopener">GitHub</a> · GPLv3</span>
+            <a :href="REPO_URL" target="_blank" rel="noopener">GitHub</a> ·
+            <a href="#" @click.prevent="feedbackOpen = true">问题反馈</a> · GPLv3</span>
         <span id="footer-api" class="mono"><a :href="apiBase()" target="_blank" rel="noopener">{{ apiBase()
         }}</a></span>
     </footer>
 
     <DrawerHost />
     <LoginModal v-if="store.loginModal" />
+    <FeedbackModal v-if="feedbackOpen" @close="feedbackOpen = false" />
 
     <div class="toast-root" aria-live="polite">
         <div v-for="t in store.toasts" :key="t.id" class="toast" :class="t.kind">{{ t.msg }}</div>
