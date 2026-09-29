@@ -189,7 +189,8 @@ onUnmounted(() => {
         <span>AHGS NOVA · Vue SFC 版 {{ APP_VERSION }} · 基于平台公开接口构建</span>
         <span>© {{ year }} Rickylxw, Midairlogn ·
             <a :href="REPO_URL" target="_blank" rel="noopener">GitHub</a> · GPLv3</span>
-        <span id="footer-api" class="mono">{{ apiBase() }}</span>
+        <span id="footer-api" class="mono"><a :href="apiBase()" target="_blank" rel="noopener">{{ apiBase()
+        }}</a></span>
     </footer>
 
     <DrawerHost />
