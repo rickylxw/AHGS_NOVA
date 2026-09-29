@@ -21,6 +21,7 @@ const props = defineProps({ params: { type: URLSearchParams, default: () => new 
 const runs = ref([]);
 const mySubs = ref([]);
 const recent = ref([]);
+const recentRuns = computed(() => runs.value.slice(0, 6));
 const runSel = ref("");
 const mineSel = ref("");
 const recentSel = ref("");
@@ -79,6 +80,17 @@ function pickRun() {
         mineSel.value = recentSel.value = "";
         loadSource("run", Number(runSel.value));
     }
+}
+
+/** 一键分析最近 Run */
+function openRun(r) {
+    runSel.value = String(r.run_id);
+    mineSel.value = recentSel.value = "";
+    loadSource("run", r.run_id);
+}
+
+function isCurrentRun(id) {
+    return isRunMode.value && source.value?.id === id;
 }
 
 function pickMine() {
@@ -562,6 +574,21 @@ function genHint(g, gi) {
                 <span v-if="source" class="badge feature-badge">{{ source.type === 'run' ? 'Run #' + source.id + '（实时监控）'
                     : '提交 #' + source.id }}</span>
                 <button v-if="isRunMode" class="btn small" style="margin-left: auto" @click="saveInstance">💾 保存实例</button>
+            </div>
+            <div v-if="recentRuns.length">
+                <div class="mine-head"><span class="mine-title">🕒 最近 Run</span>
+                    <span class="hint">我的最近 {{ recentRuns.length }} 次 · 点击卡片立即分析</span></div>
+                <div class="recent-runs">
+                    <button v-for="r in recentRuns" :key="r.run_id" class="recent-run"
+                        :class="{ on: isCurrentRun(r.run_id) }" @click="openRun(r)">
+                        <span class="rr-top">
+                            <span class="rr-id mono">Run #{{ r.run_id }}</span>
+                            <span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span>
+                        </span>
+                        <span class="rr-problem">{{ r.problem_key ?? "—" }}</span>
+                        <span class="rr-best mono">最优 {{ fmtObj(r.best_objective) }}</span>
+                    </button>
+                </div>
             </div>
             <div class="error-banner" v-if="loadErr">{{ loadErr }}
                 <div v-if="err401" style="margin-top: 8px"><button class="btn primary"
