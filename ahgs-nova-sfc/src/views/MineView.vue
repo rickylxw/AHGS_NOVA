@@ -146,6 +146,11 @@ function statusName(s) {
     return STATUS_LABEL[s] ?? s ?? "—";
 }
 
+/** 名次底色：前三名金/银/铜，其余为主题色 */
+function rankCls(r) {
+    return r === 1 ? "rp1" : r === 2 ? "rp2" : r === 3 ? "rp3" : "rpn";
+}
+
 onMounted(() => {
     if (tab.value === "instances") loadInstances();
     else if (tab.value === "profile") loadProfile();
@@ -359,7 +364,9 @@ async function savePassword() {
                     <div class="tier-body">
                         <div v-for="c in g.items" :key="c.key" class="tier-row" :title="c.fullName" @click="jumpTo(c.key)">
                             <span class="tier-track">{{ c.name }}</span>
-                            <span class="tier-rank mono">{{ c.rank ? "第" + c.rank + "名" : "—" }}</span>
+                            <span v-if="c.rank" class="rank-pill tier-rank" :class="rankCls(c.rank)">第{{
+                                c.rank }}名</span>
+                            <span v-else class="tier-rank mono">—</span>
                             <span class="tier-best mono">{{ c.best != null ? fmtObj(c.best) : "—" }}</span>
                             <span class="tier-top1" :class="{ me: c.top1Me }"
                                 :title="c.top1 ? '第一名：' + c.top1.name : '暂无第一名'">
@@ -390,10 +397,10 @@ async function savePassword() {
                     <div class="mine-head">
                         <span class="mine-title">{{ rankMap.get(key)?.problem_name || probName(key) }}</span>
                         <span v-if="rankMap.get(key)" class="mine-rank">
-                            <template v-if="rankMap.get(key).rank <= 3">{{ ["🥇", "🥈", "🥉"][rankMap.get(key).rank - 1]
-                            }}</template>
-                            第 <b class="mono">{{ rankMap.get(key).rank }}</b> 名 · 最优 <b class="mono">{{
-                                fmtObj(rankMap.get(key).best_objective) }}</b>
+                            <span class="rank-pill" :class="rankCls(rankMap.get(key).rank)"><template
+                                    v-if="rankMap.get(key).rank <= 3">{{ ["🥇", "🥈", "🥉"][rankMap.get(key).rank - 1]
+                                    }}</template>第 <b class="mono">{{ rankMap.get(key).rank }}</b> 名</span>
+                            · 最优 <b class="mono">{{ fmtObj(rankMap.get(key).best_objective) }}</b>
                         </span>
                         <span v-else class="hint">暂无名次</span>
                         <span v-if="(subsByProblem[key] || []).length > 1" title="我的提交适应度走势（时间序）">

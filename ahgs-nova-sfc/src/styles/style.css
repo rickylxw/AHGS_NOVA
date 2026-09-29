@@ -1606,6 +1606,22 @@ details.tier summary:hover { background: var(--row-hover); }
 .tier-dim { opacity: .55; }
 details.tier.tier-dim .tier-count { background: var(--border-strong); color: var(--text-dim); }
 
+/* 名次彩色底徽（第x名）：前三名金/银/铜，其余主题色 */
+.rank-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.rank-pill.rp1 { color: var(--gold); background: rgba(251, 191, 36, .14); box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .40); }
+.rank-pill.rp2 { color: var(--silver); background: rgba(199, 213, 240, .12); box-shadow: inset 0 0 0 1px rgba(199, 213, 240, .38); }
+.rank-pill.rp3 { color: var(--bronze); background: rgba(232, 160, 108, .12); box-shadow: inset 0 0 0 1px rgba(232, 160, 108, .38); }
+.rank-pill.rpn { color: var(--accent); background: var(--row-hover); box-shadow: inset 0 0 0 1px var(--border-strong); }
+
 /* 胶囊按钮渐变（同亮度双色，圆角两端不发灰） */
 :root, [data-theme="dark"] { --pill-grad: linear-gradient(135deg, #22d3ee, #818cf8); }
 [data-theme="light"] { --pill-grad: linear-gradient(135deg, #06b6d4, #6366f1); }
