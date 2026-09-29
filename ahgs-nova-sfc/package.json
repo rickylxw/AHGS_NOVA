@@ -1,7 +1,7 @@
 {
   "name": "ahgs-nova-sfc",
   "private": true,
-  "version": "2.3.0",
+  "version": "2.4.0",
   "type": "module",
   "description": "AHGS NOVA 前端 · Vue 3 单文件组件（SFC）版",
   "scripts": {
