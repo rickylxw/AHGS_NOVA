@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from "vue";
-import { api, getStoredUser } from "../lib/api";
+import { api, getToken, getStoredUser } from "../lib/api";
 import { STATUS_LABEL } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
 import { navHash } from "../lib/router";
@@ -310,7 +310,7 @@ async function savePassword() {
                         </span>
                         <span v-else class="hint">暂无名次</span>
                         <span v-if="(subsByProblem[key] || []).length > 1" title="我的提交适应度走势（时间序）">
-                            <Sparkline :values="subSpark(key)" /></span>
+                            <span><Sparkline :values="subSpark(key)" /></span></span>
                     </div>
                     <div class="table-wrap">
                         <table>

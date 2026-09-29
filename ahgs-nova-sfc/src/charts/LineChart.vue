@@ -41,7 +41,7 @@ const scale = computed(() => {
 
 const yTicks = computed(() =>
     scale.value
-        ? scale.value.ticks.map(t => ({ v: t, label: fmtTick(t), y: scale.value.Y(t).toFixed(1) }))
+        ? scale.value.ticks.map(t => ({ v: t, label: fmtTick(t), y: scale.value.Y(t) }))
         : []
 );
 
@@ -52,7 +52,7 @@ const xTicks = computed(() => {
     const out = [];
     for (let i = 0; i <= nx; i++) {
         const x = xlo + ((xhi - xlo) * i) / nx;
-        out.push({ x: X(x).toFixed(1), label: props.xFormat ? props.xFormat(x) : fmtTick(x) });
+        out.push({ x: X(x), label: props.xFormat ? props.xFormat(x) : fmtTick(x) });
     }
     return out;
 });
@@ -82,26 +82,25 @@ const drawnSeries = computed(() => {
 
 <template>
     <div v-if="!hasData" class="empty">
-        <div class="ico">{{ emptyIcon }}</div>
-        {{ emptyText }}
+        <div class="ico">{{ emptyIcon }}</div>{{ emptyText }}
     </div>
     <svg v-else :viewBox="`0 0 ${width} ${height}`" role="img" style="color: var(--text)">
         <template v-for="t in yTicks" :key="'gy' + t.v">
             <line :x1="pad.l" :y1="t.y" :x2="width - pad.r" :y2="t.y" stroke="currentColor" stroke-opacity=".1"
                 stroke-width="1" />
-            <text class="axis-text" :x="pad.l - 8" :y="Number(t.y) + 3.5" text-anchor="end">{{ t.label }}</text>
+            <text class="axis-text" :x="pad.l - 8" :y="t.y + 3.5" text-anchor="end">{{ t.label }}</text>
         </template>
         <text v-for="(t, i) in xTicks" :key="'gx' + i" class="axis-text" :x="t.x" :y="height - 10"
             text-anchor="middle">{{ t.label }}</text>
         <text v-if="yLabel" class="axis-text" :transform="`rotate(-90 14 ${height / 2})`" x="14" :y="height / 2"
             text-anchor="middle">{{ yLabel }}</text>
-        <g v-for="(s, si) in drawnSeries" :key="'s' + si">
+        <template v-for="(s, si) in drawnSeries" :key="'s' + si">
             <path :d="s.d" fill="none" :stroke="s.color" stroke-width="2.2"
                 :stroke-dasharray="s.dashed ? '5 4' : undefined" stroke-linejoin="round" stroke-linecap="round"
                 opacity=".95" />
             <circle v-for="(dot, di) in s.dots" :key="di" :cx="dot.cx" :cy="dot.cy" r="3" :fill="s.color">
                 <title>{{ dot.tip }}</title>
             </circle>
-        </g>
+        </template>
     </svg>
 </template>

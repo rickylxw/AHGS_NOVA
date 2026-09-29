@@ -22,8 +22,5 @@ const st = computed(() => ({
 </script>
 
 <template>
-    <span class="avatar" :style="st">
-        <img v-if="showImg" :src="user.avatar" alt="" referrerpolicy="no-referrer" @error="imgErr = true" />
-        {{ initial }}
-    </span>
+    <span class="avatar" :style="st"><img v-if="showImg" :src="user.avatar" alt="" referrerpolicy="no-referrer" @error="imgErr = true" />{{ initial }}</span>
 </template>

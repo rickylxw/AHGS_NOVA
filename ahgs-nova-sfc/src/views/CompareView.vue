@@ -8,6 +8,8 @@ import FwBadge from "../components/FwBadge.vue";
 import Avatar from "../components/Avatar.vue";
 import EmptyState from "../components/EmptyState.vue";
 
+const props = defineProps({ params: { type: URLSearchParams, default: () => new URLSearchParams() } });
+
 const recent = ref([]);
 const idA = ref("");
 const idB = ref("");

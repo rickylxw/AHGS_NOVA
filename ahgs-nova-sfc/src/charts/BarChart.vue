@@ -29,7 +29,7 @@ const gridLines = computed(() =>
         ? scale.value.ticks.map(t => ({
             v: t,
             label: fmtTick(t),
-            y: (pad.t + ((scale.value.hi - t) / scale.value.hi) * (props.height - pad.t - pad.b)).toFixed(1),
+            y: pad.t + ((scale.value.hi - t) / scale.value.hi) * (props.height - pad.t - pad.b),
         }))
         : []
 );
@@ -55,12 +55,12 @@ const bars = computed(() => {
         };
     });
 });
+const labeledBars = computed(() => bars.value.map((b, i) => ({ ...b, i })).filter(b => b.showLabel));
 </script>
 
 <template>
     <div v-if="!hasData" class="empty">
-        <div class="ico">{{ emptyIcon }}</div>
-        {{ emptyText }}
+        <div class="ico">{{ emptyIcon }}</div>{{ emptyText }}
     </div>
     <svg v-else :viewBox="`0 0 ${width} ${height}`" style="color: var(--text)">
         <defs>
@@ -71,14 +71,13 @@ const bars = computed(() => {
         </defs>
         <template v-for="t in gridLines" :key="'g' + t.v">
             <line :x1="pad.l" :y1="t.y" :x2="width - pad.r" :y2="t.y" stroke="currentColor" stroke-opacity=".1" />
-            <text class="axis-text" :x="pad.l - 6" :y="Number(t.y) + 3.5" text-anchor="end">{{ t.label }}</text>
+            <text class="axis-text" :x="pad.l - 6" :y="t.y + 3.5" text-anchor="end">{{ t.label }}</text>
         </template>
-        <g v-for="(b, i) in bars" :key="i">
-            <rect :x="b.x" :y="b.y" :width="b.w" :height="b.h" rx="2.5" :fill="b.fill" :opacity="b.opacity">
-                <title>{{ b.tip }}</title>
-            </rect>
-            <text v-if="b.showLabel" class="axis-text" :x="b.labelX" :y="height - 8" text-anchor="middle">
-                {{ b.label }}</text>
-        </g>
+        <rect v-for="(b, i) in bars" :key="i" :x="b.x" :y="b.y" :width="b.w" :height="b.h" rx="2.5" :fill="b.fill"
+            :opacity="b.opacity">
+            <title>{{ b.tip }}</title>
+        </rect>
+        <text v-for="b in labeledBars" :key="'t' + b.i" class="axis-text" :x="b.labelX" :y="height - 8"
+            text-anchor="middle">{{ b.label }}</text>
     </svg>
 </template>

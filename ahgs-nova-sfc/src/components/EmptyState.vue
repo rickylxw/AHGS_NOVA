@@ -7,7 +7,6 @@ defineProps({
 
 <template>
     <div class="empty">
-        <div class="ico">{{ icon }}</div>
-        {{ desc }}
+        <div class="ico">{{ icon }}</div>{{ desc }}
     </div>
 </template>

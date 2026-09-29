@@ -27,8 +27,7 @@ function click(row) {
 
 <template>
     <div v-if="!rows.length" class="empty">
-        <div class="ico">🏁</div>
-        暂无参赛记录
+        <div class="ico">🏁</div>暂无参赛记录
     </div>
     <div v-else class="hbar-list">
         <div v-for="r in computedRows" :key="r.rank" class="hbar-row" @click="click(r)">

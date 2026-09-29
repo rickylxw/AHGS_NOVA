@@ -32,8 +32,7 @@ const arcs = computed(() => {
 
 <template>
     <div v-if="!total" class="empty">
-        <div class="ico">{{ emptyIcon }}</div>
-        暂无数据
+        <div class="ico">{{ emptyIcon }}</div>暂无数据
     </div>
     <div v-else class="donut-flex">
         <svg viewBox="0 0 140 140" width="150" height="150">
