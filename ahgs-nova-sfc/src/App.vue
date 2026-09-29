@@ -14,6 +14,8 @@ const bootErr = ref("");
 const settingsOpen = ref(false);
 const apiInput = ref(apiBase());
 const apiMsg = ref("");
+const year = new Date().getFullYear();
+const REPO_URL = "https://github.com/rickylxw/AHGS_NOVA";
 
 const navItems = [
     { name: "dashboard", label: "总览" },
@@ -184,6 +186,8 @@ onUnmounted(() => {
 
     <footer id="footer">
         <span>AHGS NOVA · Vue SFC 版 · 基于平台公开接口构建</span>
+        <span>© {{ year }} Rickylxw, Midairlogn ·
+            <a :href="REPO_URL" target="_blank" rel="noopener">GitHub</a> · GPLv3</span>
         <span class="mono">{{ apiBase() }}</span>
     </footer>
 

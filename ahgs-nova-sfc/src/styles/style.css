@@ -1281,6 +1281,10 @@ th.num {
     flex-wrap: wrap;
 }
 
+#footer a:hover {
+    text-decoration: underline;
+}
+
 .mine-head {
     display: flex;
     align-items: center;
