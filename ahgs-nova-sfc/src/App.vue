@@ -5,6 +5,7 @@ import { DEFAULT_API, LS } from "./lib/constants";
 import { store, applyTheme, closeDrawer, setSession } from "./lib/store";
 import { route, getView, navHash, parseHash } from "./lib/router";
 import { fullName } from "./lib/format";
+import { APP_VERSION } from "./lib/version";
 import Avatar from "./components/Avatar.vue";
 import LoginModal from "./components/LoginModal.vue";
 import DrawerHost from "./components/drawers/DrawerHost.vue";
@@ -159,7 +160,7 @@ onUnmounted(() => {
             </div>
         </div>
         <div v-if="settingsOpen" class="popover" style="right: 16px; top: 58px" @click.stop>
-            <h4>接口设置</h4>
+            <h4>接口设置 <span class="hint">{{ APP_VERSION }}</span></h4>
             <div class="field">
                 <label>API 基地址</label>
                 <input v-model="apiInput" :placeholder="DEFAULT_API" />
@@ -185,7 +186,7 @@ onUnmounted(() => {
     </main>
 
     <footer id="footer">
-        <span>AHGS NOVA · Vue SFC 版 · 基于平台公开接口构建</span>
+        <span>AHGS NOVA · Vue SFC 版 {{ APP_VERSION }} · 基于平台公开接口构建</span>
         <span>© {{ year }} Rickylxw, Midairlogn ·
             <a :href="REPO_URL" target="_blank" rel="noopener">GitHub</a> · GPLv3</span>
         <span class="mono">{{ apiBase() }}</span>
