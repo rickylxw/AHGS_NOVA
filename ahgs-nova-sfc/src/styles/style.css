@@ -1300,6 +1300,23 @@ th.num {
     margin-top: 4px;
 }
 
+/* 我的空间：速览与详细记录分区 */
+.records-block .tier {
+    margin-bottom: 8px;
+}
+
+.track-section {
+    margin-top: 12px;
+    padding: 2px 14px 14px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 12px;
+    scroll-margin-top: 70px;
+}
+
+.track-section .mine-head {
+    margin-top: 12px;
+}
+
 .mine-title {
     font-weight: 800;
     font-size: 15.5px;

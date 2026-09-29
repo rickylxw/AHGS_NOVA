@@ -3,7 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { api, getToken, getStoredUser } from "../lib/api";
 import { STATUS_LABEL } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
-import { navHash } from "../lib/router";
+import { navToCurve } from "../lib/router";
 import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime } from "../lib/format";
 import Sparkline from "../charts/Sparkline.vue";
 import FwBadge from "../components/FwBadge.vue";
@@ -95,7 +95,15 @@ const meta = computed(
 );
 
 function jumpTo(key) {
-    document.getElementById("sec-" + key)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (key === "__summary__") {
+        // 回到页面顶部：完整露出「我的空间」标题、页签与速览区
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+    }
+    document.getElementById("sec-" + key)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+    });
 }
 
 function sortedSubs(key) {
@@ -273,10 +281,13 @@ async function savePassword() {
         <div v-if="tab === 'records'">
             <div v-if="recordsLoading" class="loading-row"><span class="spinner"></span>加载中…</div>
             <template v-else>
-                <div class="mine-head"><span class="mine-title">各赛道速览</span>
-                    <span class="hint">共 {{ trackCards.length }} 个赛道 · {{ participatedCount }} 个已参与 · 按名次分组，点开查看</span>
-                </div>
-                <details v-for="g in tierGroups" :key="g.key" class="tier" :class="{ 'tier-dim': g.key === 'none' }">
+                <div id="sec-summary" class="records-block">
+                    <div class="mine-head"><span class="mine-title">📊 各赛道速览</span>
+                        <span class="hint">共 {{ trackCards.length }} 个赛道 · {{ participatedCount }} 个已参与 ·
+                            按名次分组，点击行跳到下方详情</span>
+                    </div>
+                    <details v-for="g in tierGroups" :key="g.key" class="tier"
+                        :class="{ 'tier-dim': g.key === 'none' }">
                     <summary>
                         <span class="tier-name">{{ g.label }}</span>
                         <span class="tier-count">{{ g.items.length }} 个赛道</span>
@@ -294,12 +305,20 @@ async function savePassword() {
                             <span class="tier-meta">{{ c.count }} 次<template v-if="c.lastAt"> · {{ fmtTime(c.lastAt)
                             }}</template></span>
                             <span v-if="c.spark.length > 1" class="tier-spark"><Sparkline :values="c.spark" /></span>
-                            <button class="btn small" @click.stop="navHash('curve', new URLSearchParams({ id: String(c.bestId) }))"
-                                :disabled="!c.bestId">分析</button>
+                            <button class="btn small"
+                                @click.stop="navToCurve(c.bestId)" :disabled="!c.bestId">分析</button>
                         </div>
                     </div>
                 </details>
-                <div v-for="key in problemKeys" :key="key" :id="'sec-' + key">
+                </div>
+
+                <div class="records-block">
+                    <div class="mine-head"><span class="mine-title">📋 详细提交记录</span>
+                        <span class="hint">每个赛道一张表 · 点击行查看提交详情</span>
+                    </div>
+                    <div v-if="!problemKeys.length" class="hint" style="padding: 6px 0">暂无提交记录</div>
+                </div>
+                <div v-for="key in problemKeys" :key="key" :id="'sec-' + key" class="track-section">
                     <div class="mine-head">
                         <span class="mine-title">{{ rankMap.get(key)?.problem_name || probName(key) }}</span>
                         <span v-if="rankMap.get(key)" class="mine-rank">
@@ -311,6 +330,8 @@ async function savePassword() {
                         <span v-else class="hint">暂无名次</span>
                         <span v-if="(subsByProblem[key] || []).length > 1" title="我的提交适应度走势（时间序）">
                             <span><Sparkline :values="subSpark(key)" /></span></span>
+                        <button class="btn small" style="margin-left: auto" title="回到各赛道速览"
+                            @click="jumpTo('__summary__')">↑ 速览</button>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -335,8 +356,7 @@ async function savePassword() {
                                     <td class="num mono">{{ fmtObj(s.objective) }}</td>
                                     <td class="num mono">{{ fmtTokens(s.total_tokens) }}</td>
                                     <td class="mono hint">{{ fmtTime(s.created_at) }}</td>
-                                    <td><button class="btn small"
-                                            @click.stop="navHash('curve', new URLSearchParams({ id: s.id }))">曲线</button></td>
+                                    <td><button class="btn small" @click.stop="navToCurve(s.id)">曲线</button></td>
                                 </tr>
                             </tbody>
                         </table>

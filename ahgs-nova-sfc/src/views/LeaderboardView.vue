@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { api } from "../lib/api";
 import { store, toast, openSubmissionDrawer, openUserDrawer } from "../lib/store";
-import { navHash } from "../lib/router";
+import { navToCurve } from "../lib/router";
 import { FW_LABEL } from "../lib/constants";
 import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, downloadText } from "../lib/format";
 import HbarList from "../charts/HbarList.vue";
@@ -231,8 +231,7 @@ onUnmounted(() => {
                         <td class="num mono">{{ fmtObj(e.best_objective) }}</td>
                         <td class="num mono">{{ fmtTokens(e.total_tokens) }}</td>
                         <td class="mono hint" :title="e.best_submitted_at || ''">{{ fmtTime(e.best_submitted_at) }}</td>
-                        <td><button class="btn small" @click.stop="navHash('curve', new URLSearchParams({ id:
- e.submission_id }))">曲线</button></td>
+                        <td><button class="btn small" @click.stop="navToCurve(e.submission_id)">曲线</button></td>
                     </tr>
                 </tbody>
             </table>

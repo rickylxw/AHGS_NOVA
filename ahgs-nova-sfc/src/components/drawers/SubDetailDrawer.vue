@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { api } from "../../lib/api";
 import { store, closeDrawer } from "../../lib/store";
-import { navHash } from "../../lib/router";
+import { navToCurve } from "../../lib/router";
 import { fmtObj, fmtTokens, fullName } from "../../lib/format";
 import Avatar from "../Avatar.vue";
 import SrcBadge from "../SrcBadge.vue";
@@ -76,7 +76,7 @@ function isLoadErr() {
                 <CodeBlock :code="d.algorithm ?? ''" />
             </div>
             <button class="btn primary" style="width: 100%; margin-top: 8px"
-                @click="navHash('curve', new URLSearchParams({ id: d.id ?? sid }))">📈 查看进化曲线分析</button>
+                @click="navToCurve(d.id ?? sid)">📈 查看进化曲线分析</button>
         </template>
     </div>
 </template>

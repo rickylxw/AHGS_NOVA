@@ -44,6 +44,12 @@ export function navHash(name, params) {
     location.hash = "#/" + name + q;
 }
 
+/** 跳转到某次提交的曲线分析页（模板里不能直接 new URLSearchParams —— 编译器会加 _ctx. 前缀） */
+export function navToCurve(id) {
+    if (id == null || id === "") return;
+    navHash("curve", new URLSearchParams({ id: String(id) }));
+}
+
 export function initRouter() {
     Object.assign(route, parseHash());
     window.addEventListener("hashchange", () => Object.assign(route, parseHash()));
