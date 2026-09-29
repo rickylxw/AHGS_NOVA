@@ -99,7 +99,7 @@ const fwSegments = computed(() =>
             <div class="stat">
                 <div class="k">近期提交</div>
                 <div class="v">{{ recent.length }}</div>
-                <div class="s">最近提交流样本</div>
+                <div class="s">{{ recent.length >= 200 ? "已到平台单次上限（200 条）" : "最近提交流样本" }}</div>
             </div>
             <div class="stat">
                 <div class="k">累计 token</div>
