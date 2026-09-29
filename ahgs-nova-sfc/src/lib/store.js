@@ -28,12 +28,22 @@ export function toast(msg, kind = "") {
 
 export function setSession(token, user) {
     if (token) localStorage.setItem(LS.token, token);
-    if (user) localStorage.setItem(LS.user, JSON.stringify(user));
+    if (user) {
+        localStorage.setItem(LS.user, JSON.stringify(user));
+        store.user = user;
+    }
 }
 
 export function clearSession() {
     localStorage.removeItem(LS.token);
     localStorage.removeItem(LS.user);
+    store.user = null;
+}
+
+/** 主动退出登录：清空会话并强制路由视图重建（受登录门控的页面会显示登录提示） */
+export function logout() {
+    clearSession();
+    store.viewVer = (store.viewVer || 0) + 1;
 }
 
 /* ---------- 抽屉动作 ---------- */

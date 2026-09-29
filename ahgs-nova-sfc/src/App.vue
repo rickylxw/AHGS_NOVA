@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { api, apiBase, getToken, ApiError } from "./lib/api";
+import { api, apiBase, getToken, isTokenExpired, getTokenExpiry, ApiError } from "./lib/api";
 import { DEFAULT_API, LS } from "./lib/constants";
-import { store, applyTheme, closeDrawer, setSession } from "./lib/store";
+import { store, applyTheme, closeDrawer, setSession, clearSession, logout, toast } from "./lib/store";
 import { route, getView, navHash, parseHash } from "./lib/router";
 import { fullName } from "./lib/format";
 import { APP_VERSION } from "./lib/version";
@@ -13,6 +13,7 @@ import DrawerHost from "./components/drawers/DrawerHost.vue";
 const ready = ref(false);
 const bootErr = ref("");
 const settingsOpen = ref(false);
+const userMenuOpen = ref(false);
 const apiInput = ref(apiBase());
 const apiMsg = ref("");
 const year = new Date().getFullYear();
@@ -43,6 +44,12 @@ const routeKey = computed(
 
 onMounted(async () => {
     applyTheme(store.theme);
+    // 启动即校验本地 JWT：已过期直接清除会话并引导重新登录（不等首个 401）
+    if (isTokenExpired()) {
+        clearSession();
+        toast("登录已过期，请重新登录", "err");
+        store.loginModal = true;
+    }
     try {
         const r = await api("/api/problems");
         store.problems = r.problems ?? [];
@@ -94,24 +101,61 @@ function resetApi() {
     location.reload();
 }
 
+/* ---------- 用户菜单 / 退出登录 ---------- */
+function toggleUserMenu() {
+    userMenuOpen.value = !userMenuOpen.value;
+}
+
+function goMine() {
+    userMenuOpen.value = false;
+    navHash("mine");
+}
+
+function doLogout() {
+    userMenuOpen.value = false;
+    logout();
+    toast("已退出登录");
+}
+
+/** token 过期（带 token 的请求返回 401）时自动登出并引导重新登录 */
+function onSessionExpired() {
+    if (!store.user) return; // 避免并发 401 重复提示
+    clearSession();
+    store.viewVer = (store.viewVer || 0) + 1;
+    userMenuOpen.value = false;
+    toast("登录已过期，请重新登录", "err");
+    store.loginModal = true;
+}
+
 const onKey = ev => {
     if (ev.key === "Escape") {
         closeDrawer();
         store.loginModal = false;
         settingsOpen.value = false;
+        userMenuOpen.value = false;
     }
 };
 const onClick = ev => {
     if (settingsOpen.value && !ev.target.closest(".popover") && !ev.target.closest(".icon-btn"))
         settingsOpen.value = false;
+    if (userMenuOpen.value && !ev.target.closest(".popover") && !ev.target.closest(".user-chip"))
+        userMenuOpen.value = false;
 };
+let expireTimer = null;
 onMounted(() => {
+    window.addEventListener("ahgs:session-expired", onSessionExpired);
     document.addEventListener("keydown", onKey);
     document.addEventListener("click", onClick);
+    // 每 30s 检查一次本地 JWT 是否过期（页面长期驻留时的主动登出）
+    expireTimer = setInterval(() => {
+        if (store.user && getTokenExpiry() != null && Date.now() >= getTokenExpiry()) onSessionExpired();
+    }, 30000);
 });
 onUnmounted(() => {
+    window.removeEventListener("ahgs:session-expired", onSessionExpired);
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("click", onClick);
+    if (expireTimer) clearInterval(expireTimer);
 });
 </script>
 
@@ -155,7 +199,7 @@ onUnmounted(() => {
                 </svg>
             </button>
             <button v-if="!store.user" class="btn-login" @click="store.loginModal = true">登录 / 注册</button>
-            <div v-else class="user-chip link-ish" title="点击查看我的空间" @click="navHash('mine')">
+            <div v-else class="user-chip link-ish" title="账户菜单" @click="toggleUserMenu">
                 <Avatar :user="store.user" :size="26" /><b>{{ fullName(store.user) }}</b>
             </div>
         </div>
@@ -171,6 +215,20 @@ onUnmounted(() => {
                 <button class="btn" @click="resetApi">恢复默认</button>
             </div>
             <div class="hint" style="margin-top: 8px">{{ apiMsg }}</div>
+        </div>
+        <div v-if="userMenuOpen && store.user" class="popover" style="right: 16px; top: 58px" @click.stop>
+            <h4>账户</h4>
+            <div class="user-cell" style="margin-bottom: 12px">
+                <Avatar :user="store.user" />
+                <div class="u-name">
+                    <span class="u-main">{{ fullName(store.user) }}</span>
+                    <span class="u-sub mono">{{ store.user.username }}</span>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px">
+                <button class="btn" @click="goMine">👤 我的空间</button>
+                <button class="btn danger" @click="doLogout">🚪 退出登录</button>
+            </div>
         </div>
     </header>
 
