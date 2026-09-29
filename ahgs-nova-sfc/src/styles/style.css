@@ -68,6 +68,12 @@ body {
     flex-direction: column;
 }
 
+#app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
 .mono {
     font-family: "JetBrains Mono", "Cascadia Code", Consolas, "Courier New", monospace;
 }
