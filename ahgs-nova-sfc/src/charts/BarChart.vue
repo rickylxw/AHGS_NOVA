@@ -16,12 +16,17 @@ const gradId = `barg-${Math.random().toString(36).slice(2, 9)}`;
 
 const hasData = computed(() => props.items.length > 0);
 
+/* 支持负值：坐标范围覆盖 [min, max]，0 为基线（全负时基线在顶部，全正时在底部） */
 const scale = computed(() => {
     if (!hasData.value) return null;
-    const max = Math.max(1, ...props.items.map(i => i.value));
-    const { ticks, hi } = niceTicks(0, max, 3);
+    const vals = props.items.map(i => Number(i.value)).filter(isFinite);
+    const vMax = Math.max(...vals, 0);
+    const vMin = Math.min(...vals, 0);
+    const { ticks, lo, hi } = niceTicks(vMin, vMax === vMin ? vMax + 1 : vMax, 3);
+    const plotH = props.height - pad.t - pad.b;
     const bw = (props.width - pad.l - pad.r) / Math.max(props.items.length, 1);
-    return { ticks, hi, bw };
+    const y = v => pad.t + ((hi - v) / (hi - lo)) * plotH;
+    return { ticks, lo, hi, bw, plotH, y, zeroY: y(0) };
 });
 
 const gridLines = computed(() =>
@@ -29,26 +34,29 @@ const gridLines = computed(() =>
         ? scale.value.ticks.map(t => ({
             v: t,
             label: fmtTick(t),
-            y: pad.t + ((scale.value.hi - t) / scale.value.hi) * (props.height - pad.t - pad.b),
+            y: scale.value.y(t),
         }))
         : []
 );
 
 const bars = computed(() => {
     if (!scale.value) return [];
-    const { hi, bw } = scale.value;
+    const { bw, plotH, lo, hi, zeroY } = scale.value;
     return props.items.map((it, i) => {
-        const h = (it.value / hi) * (props.height - pad.t - pad.b);
+        const v = Number(it.value);
+        const full = Math.abs(isFinite(v) ? v : 0) / (hi - lo) * plotH;
+        const positive = v >= 0;
+        const h = Math.max(full, Math.abs(v) > 0 ? 1.5 : 0);
         const x = pad.l + i * bw + bw * 0.14;
         const w = bw * 0.72;
         return {
             x: x.toFixed(1),
-            y: (props.height - pad.b - h).toFixed(1),
+            y: (positive ? zeroY - h : zeroY).toFixed(1),
             w: w.toFixed(1),
-            h: Math.max(h, it.value > 0 ? 1.5 : 0).toFixed(1),
+            h: h.toFixed(1),
             fill: it.color || `url(#${gradId})`,
-            opacity: it.value ? 0.92 : 0.15,
-            tip: (it.tip ?? it.label) + "：" + fmtTick(it.value),
+            opacity: v ? 0.92 : 0.15,
+            tip: (it.tip ?? it.label) + "：" + fmtTick(v),
             showLabel: props.items.length <= 14 || i % Math.ceil(props.items.length / 12) === 0,
             labelX: (x + w / 2).toFixed(1),
             label: it.label,
