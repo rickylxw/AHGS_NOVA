@@ -7,6 +7,7 @@ export const LS = {
     user: "ahgs_user",
     api: "nova_api_base",
     theme: "nova_theme",
+    remember: "ahgs_remember",
 };
 
 export const FW_LABEL = {

@@ -1088,6 +1088,35 @@ th.num {
     margin-top: 3px;
 }
 
+/* 密码输入框 + 显示/隐藏切换 */
+.pw-wrap {
+    position: relative;
+}
+
+.pw-wrap input {
+    width: 100%;
+    padding-right: 36px;
+}
+
+.pw-toggle {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    background: none;
+    border: none;
+    padding: 4px;
+    color: var(--text-faint);
+    cursor: pointer;
+    line-height: 0;
+}
+
+.pw-toggle:hover {
+    color: var(--accent);
+}
+
 /* Toast */
 .toast-root {
     position: fixed;
