@@ -4,7 +4,7 @@ import { api, getToken, getStoredUser } from "../lib/api";
 import { STATUS_LABEL } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
 import { navToCurve } from "../lib/router";
-import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime } from "../lib/format";
+import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, isAscend } from "../lib/format";
 import Sparkline from "../charts/Sparkline.vue";
 import FwBadge from "../components/FwBadge.vue";
 import SrcBadge from "../components/SrcBadge.vue";
@@ -23,6 +23,8 @@ const mySubs = ref([]);
 const top1Map = ref(new Map()); // problem_key -> 第一名 entry
 const instances = ref([]);
 const runs = ref([]);
+const runTop1Map = ref(new Map());  // run 涉及问题 -> 第一名 entry
+const runMyBestMap = ref(new Map()); // run 涉及问题 -> 我的名次 entry
 const me = ref({});
 const pf = reactive({ displayName: "", email: "", phone: "" });
 const pfMsg = ref("");
@@ -192,7 +194,43 @@ async function loadInstances() {
     ]);
     instances.value = i;
     runs.value = r;
+    // 涉及问题的第一名与我的名次（用于进化记录表的对比列）
+    const pkeys = [...new Set(runs.value.map(x => x.problem_key).filter(Boolean))];
+    if (pkeys.length) {
+        const [rankLists, myRanks] = await Promise.all([
+            Promise.all(pkeys.map(k => api("/api/ranking/" + k).then(x => x.entries ?? []).catch(() => []))),
+            api("/api/ranking/me").then(x => x.entries ?? []).catch(() => []),
+        ]);
+        const t1 = new Map();
+        const mb = new Map();
+        pkeys.forEach((k, idx) => {
+            const top = (rankLists[idx] ?? []).find(e => e.rank === 1);
+            if (top) t1.set(k, top);
+            const mine = myRanks.find(e => e.problem_key === k);
+            if (mine) mb.set(k, mine);
+        });
+        runTop1Map.value = t1;
+        runMyBestMap.value = mb;
+    }
     instLoading.value = false;
+}
+
+/** 进化记录行：与我最优的差距文本（ascend-aware） */
+function runGapText(r) {
+    const mine = runMyBestMap.value.get(r.problem_key);
+    const best = Number(r.best_objective);
+    if (!mine || !isFinite(best)) return "";
+    const myBest = Number(mine.best_objective);
+    const asc = isAscend(r.problem_key);
+    const worse = asc ? (best - myBest) / Math.abs(myBest || 1) * 100 : (myBest - best) / Math.abs(myBest || 1) * 100;
+    if (worse <= 0.005) return "🏆 即个人最优";
+    return "距个人最优 +" + worse.toFixed(1) + "%";
+}
+
+function runTop1Text(r) {
+    const top = runTop1Map.value.get(r.problem_key);
+    if (!top) return "";
+    return "🥇 " + (top.display_name || top.username) + " · " + fmtObj(top.best_objective);
 }
 
 async function loadProfile() {
@@ -437,6 +475,8 @@ async function savePassword() {
                                 <th>问题</th>
                                 <th>状态</th>
                                 <th class="num">最优适应度</th>
+                                <th>赛道第一名</th>
+                                <th>与我最优</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -446,6 +486,8 @@ async function savePassword() {
                                 <td class="mono">{{ r.problem_key ?? "—" }}</td>
                                 <td><span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span></td>
                                 <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
+                                <td class="tier-top1" :title="runTop1Text(r)">{{ runTop1Text(r) || "—" }}</td>
+                                <td class="mono">{{ runGapText(r) || "—" }}</td>
                                 <td><a class="btn small" :href="'#/curve?run=' + r.run_id">监控 →</a></td>
                             </tr>
                         </tbody>
