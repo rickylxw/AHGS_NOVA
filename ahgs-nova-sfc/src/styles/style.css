@@ -216,6 +216,11 @@ textarea {
     border-color: var(--border-strong);
 }
 
+/* 汉堡菜单按钮：仅移动端显示 */
+.nav-toggle {
+    display: none;
+}
+
 /* 用户区 */
 .user-chip {
     display: flex;
@@ -1152,7 +1157,7 @@ th.num {
 .popover {
     position: fixed;
     z-index: 110;
-    width: 330px;
+    width: min(330px, calc(100vw - 24px));
     background: var(--card);
     border: 1px solid var(--border-strong);
     border-radius: 12px;
@@ -1470,9 +1475,45 @@ th.num {
         width: calc(100% - 24px);
     }
 
+    /* 顶栏收为一行：品牌 + 右侧按钮 + 汉堡；导航折叠为下拉面板 */
     #topbar {
-        padding: 10px 12px;
+        padding: 8px 12px;
         gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .nav-toggle {
+        display: grid;
+        order: 2;
+    }
+
+    .topbar-right {
+        order: 1;
+        margin-left: auto;
+    }
+
+    .user-chip b {
+        max-width: 90px;
+    }
+
+    #main-nav {
+        display: none;
+        order: 10;
+        flex-basis: 100%;
+        flex-direction: column;
+        gap: 2px;
+        padding: 6px 0;
+        border-top: 1px solid var(--border);
+    }
+
+    #main-nav.open {
+        display: flex;
+    }
+
+    #main-nav a {
+        display: block;
+        padding: 10px 14px;
+        font-size: 15px;
     }
 
     .vs-grid {

@@ -14,6 +14,7 @@ const ready = ref(false);
 const bootErr = ref("");
 const settingsOpen = ref(false);
 const userMenuOpen = ref(false);
+const navOpen = ref(false);
 const apiInput = ref(apiBase());
 const apiMsg = ref("");
 const year = new Date().getFullYear();
@@ -133,6 +134,7 @@ const onKey = ev => {
         store.loginModal = false;
         settingsOpen.value = false;
         userMenuOpen.value = false;
+        navOpen.value = false;
     }
 };
 const onClick = ev => {
@@ -140,6 +142,8 @@ const onClick = ev => {
         settingsOpen.value = false;
     if (userMenuOpen.value && !ev.target.closest(".popover") && !ev.target.closest(".user-chip"))
         userMenuOpen.value = false;
+    if (navOpen.value && !ev.target.closest("#main-nav") && !ev.target.closest(".nav-toggle"))
+        navOpen.value = false;
 };
 let expireTimer = null;
 onMounted(() => {
@@ -172,9 +176,9 @@ onUnmounted(() => {
             <span class="brand-text">AHGS<em>NOVA</em></span>
             <span class="brand-sub">Vue SFC</span>
         </a>
-        <nav id="main-nav">
+        <nav id="main-nav" :class="{ open: navOpen }">
             <a v-for="item in navItems" :key="item.name" :href="'#/' + item.name"
-                :class="{ on: route.name === item.name }">{{ item.label }}</a>
+                :class="{ on: route.name === item.name }" @click="navOpen = false">{{ item.label }}</a>
         </nav>
         <div class="topbar-right">
             <button class="icon-btn" title="接口设置" @click="settingsOpen = !settingsOpen">
@@ -203,6 +207,17 @@ onUnmounted(() => {
                 <Avatar :user="store.user" :size="26" /><b>{{ fullName(store.user) }}</b>
             </div>
         </div>
+        <button class="icon-btn nav-toggle" title="导航菜单" :aria-expanded="navOpen" @click="navOpen = !navOpen">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round">
+                <template v-if="!navOpen">
+                    <path d="M4 6h16M4 12h16M4 18h16" />
+                </template>
+                <template v-else>
+                    <path d="M6 6l12 12M18 6L6 18" />
+                </template>
+            </svg>
+        </button>
         <div v-if="settingsOpen" class="popover" style="right: 16px; top: 58px" @click.stop>
             <h4>接口设置 <span class="hint">{{ APP_VERSION }}</span></h4>
             <div class="field">
