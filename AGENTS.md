@@ -7,9 +7,9 @@ parallel editions of the same product** — there is no backend code, no CI, and
 
 | Directory | Edition | Status |
 | --- | --- | --- |
-| `ahgs-nova-sfc/` | Vue 3 SFC + Vite (`.vue` files) | **preferred for all new work** — see `ahgs-nova-sfc/AGENTS.md` for architecture, conventions, and pitfalls |
-| `ahgs-nova-vue/` | Vue 3, runtime bundled, string templates in `js/*.js` | legacy; historically synced with new features |
-| `ahgs-nova/` | vanilla JS/HTML | archived, frozen — do not update |
+| `ahgs-nova-sfc/` | Vue 3 SFC + Vite (`.vue` files) | **the only maintained edition — all new work goes here** — see `ahgs-nova-sfc/AGENTS.md` for architecture, conventions, and pitfalls |
+| `ahgs-nova-vue/` | Vue 3, runtime bundled, string templates in `js/*.js` | **archived, frozen — do not update** |
+| `ahgs-nova/` | vanilla JS/HTML | **archived, frozen — do not update** |
 
 Each subfolder has its own `AGENTS.md` with edition-specific commands, wiring, and gotchas.
 

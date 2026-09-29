@@ -1,5 +1,7 @@
 # AGENTS.md — ahgs-nova-vue (legacy edition)
 
+> ⚠️ **ARCHIVED / 已归档冻结**：本版本不再维护、不再同步任何新功能或样式，请只在 `../ahgs-nova-sfc/` 中做改动。本文件仅作历史参考。
+
 Vue 3 edition using the bundled runtime `vue.global.prod.js` (includes the template compiler) with
 **component templates as JS strings** — no npm, no build step. Preferred target for feature work is
 `../ahgs-nova-sfc/`; this folder is historically kept in sync. `../ahgs-nova/` is frozen.

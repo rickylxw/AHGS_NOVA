@@ -1,7 +1,7 @@
 # AGENTS.md — ahgs-nova (ARCHIVED)
 
-Vanilla JS/HTML edition of AHGS NOVA. **Frozen — do not update.** New work goes to `../ahgs-nova-sfc/`;
-`../ahgs-nova-vue/` is the maintained legacy edition. Keep this folder purely as a rendering/behavior
+Vanilla JS/HTML edition of AHGS NOVA. **Frozen — do not update.** New work goes to `../ahgs-nova-sfc/` only;
+`../ahgs-nova-vue/` is archived as well. Keep this folder purely as a rendering/behavior
 reference.
 
 ## Run

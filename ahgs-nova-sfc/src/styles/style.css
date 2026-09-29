@@ -1482,7 +1482,7 @@ details.tier summary:hover { background: var(--row-hover); }
   border-radius: 7px;
   cursor: pointer;
   font-size: 12.5px;
-  overflow: hidden;
+  overflow-x: auto;
 }
 .tier-row:hover { background: var(--row-hover); }
 .tier-track { font-weight: 700; min-width: 72px; }
@@ -1512,3 +1512,18 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
 .btn.primary, .btn-login {
   background: var(--pill-grad);
 }
+
+/* 名次速览：行内第一名信息 */
+.tier-top1 { min-width: 170px; font-size: 11.5px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tier-top1.me { color: var(--warn); font-weight: 700; }
+
+/* 与个人最优对比横条 */
+.vs-mine-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+}
+.vs-mine-ico { font-size: 16px; }

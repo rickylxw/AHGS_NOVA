@@ -20,6 +20,7 @@ const instLoading = ref(true);
 const profileLoading = ref(true);
 const ranks = ref([]);
 const mySubs = ref([]);
+const top1Map = ref(new Map()); // problem_key -> 第一名 entry
 const instances = ref([]);
 const runs = ref([]);
 const me = ref({});
@@ -53,6 +54,17 @@ const trackCards = computed(() =>
         const best = objs.length ? (asc ? Math.min(...objs) : Math.max(...objs)) : null;
         const bestSub = best != null ? subs.find(x => Number(x.objective) === best) : null;
         const tokens = subs.reduce((a, x) => a + (Number(x.total_tokens) || 0), 0);
+        const top1 = top1Map.value.get(p.key) ?? null;
+        const top1Me = !!(top1 && store.user && top1.user_id === store.user.id);
+        let top1GapText = "";
+        if (top1 && best != null) {
+            const t = Number(top1.best_objective);
+            if (isFinite(t)) {
+                const worse = asc ? (best - t) / Math.abs(t || 1) * 100 : (t - best) / Math.abs(t || 1) * 100;
+                if (top1Me) top1GapText = "（就是你）";
+                else if (worse > 0.005) top1GapText = "（差 " + worse.toFixed(1) + "%）";
+            }
+        }
         return {
             key: p.key,
             name: p.name.split(" ")[0],
@@ -68,6 +80,9 @@ const trackCards = computed(() =>
             lastAt: subs.at(-1)?.created_at ?? null,
             spark: objs,
             participated: subs.length > 0 || !!rank,
+            top1: top1 ? { name: top1.display_name || top1.username, best: Number(top1.best_objective) } : null,
+            top1Me,
+            top1GapText,
         };
     })
 );
@@ -156,6 +171,16 @@ async function loadRecords() {
     ]);
     ranks.value = r1;
     mySubs.value = r2;
+    // 各赛道第一名（用于速览行展示榜首成绩与差距）
+    const rankings = await Promise.all(
+        store.problems.map(p => api("/api/ranking/" + p.key).then(r => r.entries ?? []).catch(() => []))
+    );
+    const m = new Map();
+    store.problems.forEach((p, i) => {
+        const top = (rankings[i] ?? []).find(e => e.rank === 1);
+        if (top) m.set(p.key, top);
+    });
+    top1Map.value = m;
     recordsLoading.value = false;
 }
 
@@ -298,6 +323,11 @@ async function savePassword() {
                             <span class="tier-track">{{ c.name }}</span>
                             <span class="tier-rank mono">{{ c.rank ? "第" + c.rank + "名" : "—" }}</span>
                             <span class="tier-best mono">{{ c.best != null ? fmtObj(c.best) : "—" }}</span>
+                            <span class="tier-top1" :class="{ me: c.top1Me }"
+                                :title="c.top1 ? '第一名：' + c.top1.name : '暂无第一名'">
+                                <template v-if="c.top1">🥇 {{ c.top1.name }} · {{ fmtObj(c.top1.best) }}{{ c.top1GapText }}</template>
+                                <template v-else>—</template>
+                            </span>
                             <span v-if="c.fw" class="tier-fw"><FwBadge :ft="c.fw" /></span>
                             <span class="tier-model mono" :title="c.model ?? ''">{{ c.model || "—" }}</span>
                             <span class="tier-tok mono" title="累计 token">{{ c.tokens ? "Σ" + fmtTokens(c.tokens) : "—"

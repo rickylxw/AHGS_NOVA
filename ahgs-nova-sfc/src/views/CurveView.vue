@@ -47,12 +47,18 @@ let pollTimer = null;
 // submission 模式
 const rec = ref(null);
 
+// 我在各赛道的名次（用于“与自己最优对比”）
+const myRanks = ref([]);
+
 onMounted(async () => {
     runs.value = await api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []);
     mySubs.value = getToken()
         ? await api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => [])
         : [];
     recent.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
+    if (getToken()) {
+        myRanks.value = await api("/api/ranking/me").then(r => r.entries ?? []).catch(() => []);
+    }
     const runP = props.params.get("run");
     const idP = props.params.get("id");
     if (runP) {
@@ -475,6 +481,37 @@ const kwInsight = computed(() => {
     return { good, bad };
 });
 
+// ===== 与个人最优对比 =====
+const compareProblemKey = computed(() => {
+    if (source.value?.type === "run") return runProblemKey.value;
+    return sub.value.problem_key || inst.value?.problem_key || null;
+});
+const myRankEntry = computed(() => myRanks.value.find(e => e.problem_key === compareProblemKey.value) ?? null);
+const curObjective = computed(() => {
+    if (source.value?.type === "run") {
+        return status.value.best_objective ?? bestHeur.value?.objective ?? null;
+    }
+    return subObjective.value;
+});
+const mineCompare = computed(() => {
+    const cur = curObjective.value;
+    const entry = myRankEntry.value;
+    if (cur == null || !isFinite(Number(cur)) || !entry) return null;
+    const myBest = Number(entry.best_objective);
+    if (!isFinite(myBest) || myBest === 0) return null;
+    const asc = isAscend(compareProblemKey.value);
+    const deltaPct = asc
+        ? (Number(cur) - myBest) / Math.abs(myBest) * 100
+        : (myBest - Number(cur)) / Math.abs(myBest) * 100;
+    return {
+        myBest,
+        rank: entry.rank,
+        cur: Number(cur),
+        deltaPct,
+        atBest: deltaPct <= 0.005,
+    };
+});
+
 const problemLabel = computed(() => {
     if (source.value?.type === "run") return runProblemKey.value ?? "—";
     const pk = sub.value.problem_key || inst.value?.problem_key;
@@ -583,6 +620,15 @@ function genHint(g, gi) {
                             </div>
                         </div>
                     </div>
+                </div>
+                <div v-if="mineCompare" class="card vs-mine-card">
+                    <span class="vs-mine-ico">🎯</span>
+                    <span>与个人最优：</span>
+                    <span class="mono" style="font-weight: 800">{{ fmtObj(mineCompare.cur) }}</span>
+                    <span class="hint">vs 我的最好</span>
+                    <span class="mono">{{ fmtObj(mineCompare.myBest) }}</span>
+                    <span v-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
+                    <span v-else class="delta-down">距个人最优 +{{ mineCompare.deltaPct.toFixed(2) }}%（当前第 {{ mineCompare.rank }} 名）</span>
                 </div>
                 <div v-if="promptOpen" style="margin-top: 12px">
                     <div class="field">
@@ -719,6 +765,15 @@ function genHint(g, gi) {
                         <div class="chart-box">
                             <LineChart :series="mainSeries" y-label="适应度" />
                         </div>
+                    </div>
+                    <div v-if="mineCompare" class="card vs-mine-card">
+                        <span class="vs-mine-ico">🎯</span>
+                        <span>与个人最优：</span>
+                        <span class="mono" style="font-weight: 800">{{ fmtObj(mineCompare.cur) }}</span>
+                        <span class="hint">vs 我的最好</span>
+                        <span class="mono">{{ fmtObj(mineCompare.myBest) }}</span>
+                        <span v-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
+                        <span v-else class="delta-down">距个人最优 +{{ mineCompare.deltaPct.toFixed(2) }}%（当前第 {{ mineCompare.rank }} 名）</span>
                     </div>
                     <div class="card">
                         <h2>提交信息</h2>

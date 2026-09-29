@@ -55,8 +55,8 @@ src/
 - **Time**: the server returns naive UTC strings; always parse with `parseServerTime()`, never `new Date(iso)`.
 - **Optimization direction**: `ascend !== false` means lower fitness is better; always test via
   `isAscend(problemKey)`.
-- UI copy is Simplified Chinese; keep class names identical to the older editions (style.css is one shared
-  theme across the three — sync any change to the other copies).
+- UI copy is Simplified Chinese; class names kept identical to the older editions for continuity, but the
+  old editions are frozen — `src/styles/style.css` is now standalone, do NOT sync changes to them.
 - Empty/loading states: reuse `EmptyState.vue` and `.loading-row` + `.spinner`.
 
 ## Template pitfalls (they leak into the rendered DOM or break handlers)
