@@ -70,11 +70,13 @@ onMounted(async () => {
     }
 });
 
-// 同步登录用户到 store（供门控判断）
+// 登录身份变化（登录/切换账号）时强制路由视图重建；
+// 注意不能 watch 整个 store.user 引用——资料页每次刷新都会 setSession 新对象，
+// 引用变化会触发 viewVer++ → 视图重挂载 → 再 setSession 的死循环
 watch(
-    () => store.user,
-    u => {
-        if (u) store.viewVer = (store.viewVer || 0) + 1;
+    () => store.user?.id,
+    (id, oldId) => {
+        if (id != null && id !== oldId) store.viewVer = (store.viewVer || 0) + 1;
     }
 );
 

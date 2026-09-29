@@ -242,7 +242,11 @@ async function loadProfile() {
     profileLoading.value = true;
     try {
         me.value = await api("/api/auth/me");
-        setSession(null, me.value);
+        const cached = getStoredUser();
+        // 数据与缓存一致时不重复写会话，避免触发 store.user 相关的响应式链
+        if (!cached || JSON.stringify(cached) !== JSON.stringify(me.value)) {
+            setSession(null, me.value);
+        }
         pf.displayName = me.value.display_name ?? "";
         pf.email = me.value.email ?? "";
         pf.phone = me.value.phone ?? "";
