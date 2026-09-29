@@ -398,7 +398,9 @@ async function savePassword() {
                         <span v-else class="hint">暂无名次</span>
                         <span v-if="(subsByProblem[key] || []).length > 1" title="我的提交适应度走势（时间序）">
                             <span><Sparkline :values="subSpark(key)" /></span></span>
-                        <button class="btn small" style="margin-left: auto" title="回到各赛道速览"
+                        <a class="btn small" style="margin-left: auto" :href="'#/leaderboard?problem=' + key"
+                            title="查看该赛道完整排行榜">完整榜 →</a>
+                        <button class="btn small" title="回到各赛道速览"
                             @click="jumpTo('__summary__')">↑ 速览</button>
                     </div>
                     <div class="table-wrap">
