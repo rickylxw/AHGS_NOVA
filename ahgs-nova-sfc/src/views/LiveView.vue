@@ -22,6 +22,8 @@ const SRC_CHIPS = [
 const problem = ref("");
 const sortBy = ref("time");
 const paused = ref(false);
+const q = ref("");
+const mineOnly = ref(false);
 const fw = reactive(new Set());
 const src = reactive(new Set());
 const subs = ref([]);
@@ -52,6 +54,12 @@ async function load() {
 
 const sorted = computed(() => {
     let list = subs.value;
+    if (mineOnly.value && store.user) list = list.filter(s => s.user_id === store.user.id);
+    const qq = q.value.trim().toLowerCase();
+    if (qq)
+        list = list.filter(
+            s => (s.username || "").toLowerCase().includes(qq) || (s.display_name || "").toLowerCase().includes(qq)
+        );
     if (sortBy.value === "score") {
         const asc = problem.value ? isAscend(problem.value) : true;
         list = [...list].sort((a, b) =>
@@ -80,7 +88,9 @@ onUnmounted(() => clearInterval(timer));
     <div class="card">
         <h2>实时提交流 <span class="tail">全赛道 · 全用户 · 每 4 秒自动刷新 ·
                 <button class="chip" :class="{ on: !paused }" style="padding: 1px 10px" @click="paused = !paused">{{
-                    paused ? "▶ 继续" : "⏸ 暂停" }}</button></span></h2>
+                    paused ? "▶ 继续" : "⏸ 暂停" }}</button>
+                <span v-if="q || mineOnly" class="badge feature-badge" style="margin-left: 6px">筛选后 {{ sorted.length
+                }} 条</span></span></h2>
         <div class="toolbar">
             <div class="field" style="min-width: 230px">
                 <label>问题情景</label>
@@ -103,6 +113,17 @@ onUnmounted(() => clearInterval(timer));
                         @click="toggleSet(src, c.key)">{{ c.label }}</button>
                 </div>
             </div>
+            <div class="field" style="min-width: 150px">
+                <label>按用户过滤</label>
+                <input v-model="q" placeholder="用户名 / 昵称" />
+            </div>
+            <div class="field">
+                <label>&nbsp;</label>
+                <div class="chip-row">
+                    <button class="chip" :class="{ on: mineOnly }" :disabled="!store.user"
+                        :title="store.user ? '只看我的提交' : '登录后可用'" @click="mineOnly = !mineOnly">🙋 只看我的</button>
+                </div>
+            </div>
             <div class="field" style="min-width: 160px">
                 <label>排序</label>
                 <select v-model="sortBy">
@@ -113,9 +134,8 @@ onUnmounted(() => clearInterval(timer));
             </div>
         </div>
         <div v-if="err" class="error-banner">{{ err }}</div>
-        <div v-if="!subs.length">
-            <EmptyState icon="🛰️" desc="暂无提交记录，去「进化」跑一局吧" />
-        </div>
+        <EmptyState v-if="!subs.length" icon="🛰️" desc="暂无提交记录，去「进化」跑一局吧" />
+        <EmptyState v-else-if="!sorted.length" icon="🔍" desc="没有匹配当前筛选的提交" />
         <div v-else class="table-wrap">
             <table>
                 <thead>
