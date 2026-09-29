@@ -200,23 +200,23 @@ const top3BarItems = computed(() =>
     }))
 );
 const genXFormat = x => "第" + Math.round(x) + "代";
-const histSeries = computed(() => {
-    const pt = (h, i, key) => ({
-        x: h.generation ?? i,
-        y: h[key],
-        label: "第 " + (h.generation ?? i) + " 代",
-    });
-    return [
-        { name: "最优", color: "#22d3ee", points: history.value.map((h, i) => pt(h, i, "best_objective")).filter(p => p.y != null) },
-        { name: "均值", color: "#a78bfa", points: history.value.map((h, i) => pt(h, i, "avg_objective")).filter(p => p.y != null) },
-        {
-            name: "方差",
-            color: "#fb7185",
-            dashed: true,
-            points: hasVariance.value ? history.value.map((h, i) => pt(h, i, "variance")).filter(p => p.y != null) : [],
-        },
-    ];
+const pt = (h, i, key) => ({
+    x: h.generation ?? i,
+    y: h[key],
+    label: "第 " + (h.generation ?? i) + " 代",
 });
+// 方差数量级常远大于最优/均值，拆到独立坐标的单独图，避免压扁主曲线
+const histSeries = computed(() => [
+    { name: "最优", color: "#22d3ee", points: history.value.map((h, i) => pt(h, i, "best_objective")).filter(p => p.y != null) },
+    { name: "均值", color: "#a78bfa", points: history.value.map((h, i) => pt(h, i, "avg_objective")).filter(p => p.y != null) },
+]);
+const varianceSeries = computed(() => [
+    {
+        name: "方差",
+        color: "#fb7185",
+        points: history.value.map((h, i) => pt(h, i, "variance")).filter(p => p.y != null),
+    },
+]);
 const tokDeltaItems = computed(() =>
     tokenHistory.value.map((t, i) => ({
         label: String(t.generation ?? i),
@@ -691,14 +691,23 @@ function genHint(g, gi) {
             </div>
 
             <div class="card">
-                <h2>历代最优 / 均值<span v-if="hasVariance"> / 方差</span></h2>
+                <h2>历代最优 / 均值</h2>
                 <div class="legend">
                     <span><span class="dot" style="background: #22d3ee"></span>最优</span>
                     <span><span class="dot" style="background: #a78bfa"></span>均值</span>
-                    <span v-if="hasVariance"><span class="dot" style="background: #fb7185"></span>方差</span>
                 </div>
                 <div class="chart-box">
                     <LineChart :series="histSeries" y-label="适应度" :x-format="genXFormat" />
+                </div>
+            </div>
+
+            <div v-if="hasVariance" class="card">
+                <h2>历代方差 <span class="tail">独立坐标 · 方差数量级大，与上图分开看</span></h2>
+                <div class="legend">
+                    <span><span class="dot" style="background: #fb7185"></span>方差</span>
+                </div>
+                <div class="chart-box">
+                    <LineChart :series="varianceSeries" y-label="方差" :x-format="genXFormat" />
                 </div>
             </div>
 
