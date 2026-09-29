@@ -4,7 +4,7 @@ import { api, getToken, getStoredUser } from "../lib/api";
 import { STATUS_LABEL } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
 import { navToCurve } from "../lib/router";
-import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, isAscend } from "../lib/format";
+import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, isAscend, fullNum } from "../lib/format";
 import Sparkline from "../charts/Sparkline.vue";
 import FwBadge from "../components/FwBadge.vue";
 import SrcBadge from "../components/SrcBadge.vue";
@@ -371,7 +371,7 @@ async function savePassword() {
                             <span v-if="c.rank" class="rank-pill tier-rank" :class="rankCls(c.rank)">第{{
                                 c.rank }}名</span>
                             <span v-else class="tier-rank mono">—</span>
-                            <span class="tier-best mono">{{ c.best != null ? fmtObj(c.best) : "—" }}</span>
+                            <span class="tier-best mono" :title="c.best != null ? '完整值：' + fullNum(c.best) : ''">{{ c.best != null ? fmtObj(c.best) : "—" }}</span>
                             <span class="tier-top1" :class="{ me: c.top1Me }"
                                 :title="c.top1 ? '第一名：' + c.top1.name : '暂无第一名'">
                                 <template v-if="c.top1">🥇 {{ c.top1.name }} · {{ fmtObj(c.top1.best) }}{{ c.top1GapText }}</template>
