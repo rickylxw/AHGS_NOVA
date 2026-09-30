@@ -58,11 +58,15 @@ const trackCards = computed(() =>
         const tokens = subs.reduce((a, x) => a + (Number(x.total_tokens) || 0), 0);
         const top1 = top1Map.value.get(p.key) ?? null;
         const top1Me = !!(top1 && store.user && top1.user_id === store.user.id);
+        // 平台重评后的成绩体系：ranking_score 是当前排名用分；ranking_legacy=true 表示沿用旧成绩
+        const rankScore = rank ? (rank.ranking_score ?? rank.best_objective) : null;
+        const legacy = rank ? rank.ranking_legacy === true : false;
+        const trainObj = rank ? (rank.train_objective ?? null) : null;
         let top1GapText = "";
-        if (top1 && best != null) {
-            const t = Number(top1.best_objective);
+        if (top1 && rankScore != null && isFinite(Number(rankScore))) {
+            const t = Number(top1.ranking_score ?? top1.best_objective);
             if (isFinite(t)) {
-                const worse = asc ? (best - t) / Math.abs(t || 1) * 100 : (t - best) / Math.abs(t || 1) * 100;
+                const worse = asc ? (Number(rankScore) - t) / Math.abs(t || 1) * 100 : (t - Number(rankScore)) / Math.abs(t || 1) * 100;
                 if (top1Me) top1GapText = "（就是你）";
                 else if (worse > 0.005) top1GapText = "（差 " + worse.toFixed(1) + "%）";
             }
@@ -73,7 +77,9 @@ const trackCards = computed(() =>
             fullName: p.name,
             asc,
             rank: rank?.rank ?? null,
-            best,
+            best: rankScore,
+            legacy,
+            trainObj,
             bestId: bestSub?.id ?? null,
             fw: bestSub?.framework_type ?? null,
             model: bestSub?.llm_model ?? null,
@@ -371,7 +377,8 @@ async function savePassword() {
                             <span v-if="c.rank" class="rank-pill tier-rank" :class="rankCls(c.rank)">第{{
                                 c.rank }}名</span>
                             <span v-else class="tier-rank mono">—</span>
-                            <span class="tier-best mono" :title="c.best != null ? '完整值：' + fullNum(c.best) : ''">{{ c.best != null ? fmtObj(c.best) : "—" }}</span>
+                            <span class="tier-best mono"
+                                :title="(c.legacy ? '旧版评估成绩（未通过新复核）' : '当前排名用分') + (c.trainObj != null ? '；新训练集成绩：' + fullNum(c.trainObj) : '') + (c.best != null ? '；完整值：' + fullNum(c.best) : '')">{{ c.best != null ? fmtObj(c.best) : "—" }}<span v-if="c.legacy" class="badge feature-badge" style="margin-left: 4px">旧</span></span>
                             <span class="tier-top1" :class="{ me: c.top1Me }"
                                 :title="c.top1 ? '第一名：' + c.top1.name : '暂无第一名'">
                                 <template v-if="c.top1">🥇 {{ c.top1.name }} · {{ fmtObj(c.top1.best) }}{{ c.top1GapText }}</template>

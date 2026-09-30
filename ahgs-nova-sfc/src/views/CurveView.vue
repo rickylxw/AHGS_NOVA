@@ -509,7 +509,8 @@ const mineCompare = computed(() => {
     const cur = curObjective.value;
     const entry = myRankEntry.value;
     if (cur == null || !isFinite(Number(cur)) || !entry) return null;
-    const myBest = Number(entry.best_objective);
+    // 平台重评后：ranking_score 是当前排名用分；best_objective 可能是旧成绩或 null
+    const myBest = Number(entry.ranking_score ?? entry.best_objective);
     if (!isFinite(myBest) || myBest === 0) return null;
     const asc = isAscend(compareProblemKey.value);
     const deltaPct = asc
@@ -521,6 +522,8 @@ const mineCompare = computed(() => {
         cur: Number(cur),
         deltaPct,
         atBest: deltaPct <= 0.005,
+        legacy: entry.ranking_legacy === true,
+        trainObj: entry.train_objective ?? null,
     };
 });
 
@@ -810,6 +813,9 @@ function genHint(g, gi) {
                         <span class="mono" :title="'完整值：' + fullNum(mineCompare.myBest)">{{ fmtObj(mineCompare.myBest) }}</span>
                         <span v-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
                         <span v-else class="delta-down">距个人最优 +{{ mineCompare.deltaPct.toFixed(2) }}%（当前第 {{ mineCompare.rank }} 名）</span>
+                        <span v-if="mineCompare.legacy" class="badge feature-badge"
+                            title="该成绩沿用旧版评估，未通过新数据复核">旧成绩</span>
+                        <span v-if="mineCompare.trainObj != null" class="hint">新训练集成绩 {{ fmtObj(mineCompare.trainObj) }}</span>
                     </div>
                     <div class="card">
                         <h2>提交信息</h2>
