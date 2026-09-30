@@ -62,6 +62,7 @@ const trackCards = computed(() =>
         const rankScore = rank ? (rank.ranking_score ?? rank.best_objective) : null;
         const trainObj = rank ? (rank.train_objective ?? null) : null;
         // 有效性 = 有排名分（ranking_score）；为 null 即新评估未通过（holdout 未过）→ 记为未参与
+        const legacy = rank ? rank.ranking_legacy === true : false;
         const score = rank ? (rank.ranking_score ?? null) : null;
         const hasValidRank = !!rank && score != null && isFinite(Number(score));
         let top1GapText = "";
@@ -181,6 +182,15 @@ watch(
 
 async function loadRecords() {
     recordsLoading.value = true;
+    const t0 = Date.now();
+    const probe = await Promise.race([
+        Promise.all([
+            api("/api/ranking/me").then(r => "rank OK " + r.entries.length).catch(e => "rank FAIL " + e.status + " " + e.message.slice(0, 40)),
+            api("/api/submissions/my").then(r => "subs OK " + r.submissions.length).catch(e => "subs FAIL " + e.status + " " + e.message.slice(0, 40)),
+        ]),
+        new Promise(res => setTimeout(() => res("HANG>5s"), 5000)),
+    ]);
+    document.documentElement.setAttribute("data-probe", String(probe) + " @" + (Date.now() - t0) + "ms");
     const [r1, r2] = await Promise.all([
         api("/api/ranking/me").then(r => r.entries ?? []).catch(() => []),
         api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => []),
