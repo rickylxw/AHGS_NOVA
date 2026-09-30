@@ -1,5 +1,5 @@
 <script setup>
-import { fmtObj, copyText } from "../../lib/format";
+import { fmtObj } from "../../lib/format";
 import { closeDrawer } from "../../lib/store";
 import CodeBlock from "../CodeBlock.vue";
 

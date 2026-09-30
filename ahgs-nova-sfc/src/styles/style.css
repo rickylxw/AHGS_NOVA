@@ -863,6 +863,14 @@ th.num {
     position: absolute;
     top: 8px;
     right: 8px;
+    z-index: 2;
+    background: var(--card-2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+}
+
+.copy-btn.copied {
+    border-color: var(--good);
+    color: var(--good);
 }
 
 /* ============ 图表 ============ */

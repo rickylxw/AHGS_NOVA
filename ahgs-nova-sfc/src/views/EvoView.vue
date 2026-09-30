@@ -4,8 +4,9 @@ import { api, getToken } from "../lib/api";
 import { EVO_DEFAULTS, FW_LABEL, STATUS_LABEL } from "../lib/constants";
 import { store, toast } from "../lib/store";
 import { navHash } from "../lib/router";
-import { fmtObj, copyText } from "../lib/format";
+import { fmtObj } from "../lib/format";
 import EmptyState from "../components/EmptyState.vue";
+import CopyButton from "../components/CopyButton.vue";
 
 const props = defineProps({ params: { type: URLSearchParams, default: () => new URLSearchParams() } });
 
@@ -456,8 +457,7 @@ function fwName(ft) {
                     </div>
                     <div class="field">
                         <label>framework.py 源码</label>
-                        <div class="code-container"><button class="btn small copy-btn"
-                                @click="copyText(cfg.framework_code)">复制</button>
+                        <div class="code-container"><CopyButton :text="cfg.framework_code || ''" />
                             <textarea v-model="cfg.framework_code" spellcheck="false"
                                 style="width: 100%; min-height: 220px; background: transparent; border: none; outline: none; color: #d7e3ff; font-family: Consolas, monospace; font-size: 12.5px; padding: 10px; resize: vertical"></textarea>
                         </div>

@@ -52,6 +52,10 @@ src/
   (login/logout etc.) must bump `store.viewVer` to force the routed view to remount.
 - **HTTP** always goes through `api()` from `lib/api.js`; never call `fetch` directly. Error messages are
   already localized — just display `e.message`.
+- **Copy-to-clipboard** always goes through `copyText()` from `lib/format.js` (Clipboard API with an
+  `execCommand` fallback — the site is served over plain HTTP, where `navigator.clipboard` is `undefined`);
+  for buttons use `components/CopyButton.vue` (adds the「已复制 ✓」flash). Never call `navigator.clipboard`
+  directly.
 - **Time**: the server returns naive UTC strings; always parse with `parseServerTime()`, never `new Date(iso)`.
 - **Optimization direction**: `ascend !== false` means lower fitness is better; always test via
   `isAscend(problemKey)`.

@@ -50,8 +50,34 @@ export function downloadText(filename, text, mime = "text/csv;charset=utf-8") {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
+/** 复制文本：优先 Clipboard API，不可用/失败时回退 execCommand（非安全上下文）；resolve 为是否成功 */
 export function copyText(text) {
-    navigator.clipboard?.writeText(text).then(() => toast("已复制到剪贴板", "ok"), () => toast("复制失败", "err"));
+    const finish = ok => {
+        toast(ok ? "已复制到剪贴板" : "复制失败", ok ? "ok" : "err");
+        return ok;
+    };
+    const p = (navigator.clipboard && navigator.clipboard.writeText)
+        ? navigator.clipboard.writeText(text).then(() => true, () => legacyCopy(text))
+        : Promise.resolve(legacyCopy(text));
+    return p.then(finish);
+}
+
+function legacyCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try {
+        ok = document.execCommand("copy");
+    } catch {
+        ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
 }
 
 export function isAscend(problemKey) {

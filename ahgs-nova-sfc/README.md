@@ -64,6 +64,7 @@ ahgs-nova-sfc/
     ├── components/
     │   ├── FwBadge.vue / SrcBadge.vue / Medal.vue / Avatar.vue
     │   ├── UserCell.vue / EmptyState.vue / CodeBlock.vue
+    │   ├── CopyButton.vue      # 复制按钮（剪贴板 API + execCommand 回退，成功闪现「已复制 ✓」）
     │   ├── KeywordInsight.vue  # 关键词洞察卡片（Run / 提交两模式复用）
     │   ├── LoginModal.vue      # 登录 / 注册弹窗
     │   └── drawers/            # 右侧抽屉（提交详情 / 用户档案 / 种群个体）+ DrawerHost
