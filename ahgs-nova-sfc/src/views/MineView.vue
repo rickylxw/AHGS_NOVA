@@ -62,8 +62,10 @@ const trackCards = computed(() =>
         const rankScore = rank ? (rank.ranking_score ?? rank.best_objective) : null;
         const legacy = rank ? rank.ranking_legacy === true : false;
         const trainObj = rank ? (rank.train_objective ?? null) : null;
+        // 只有通过新数据复核的名次才算有效参与；仅剩 legacy 旧成绩的赛道记为未参与
+        const hasValidRank = !!rank && !legacy;
         let top1GapText = "";
-        if (top1 && rankScore != null && isFinite(Number(rankScore))) {
+        if (top1 && hasValidRank && rankScore != null && isFinite(Number(rankScore))) {
             const t = Number(top1.ranking_score ?? top1.best_objective);
             if (isFinite(t)) {
                 const worse = asc ? (Number(rankScore) - t) / Math.abs(t || 1) * 100 : (t - Number(rankScore)) / Math.abs(t || 1) * 100;
@@ -76,8 +78,8 @@ const trackCards = computed(() =>
             name: p.name.split(" ")[0],
             fullName: p.name,
             asc,
-            rank: rank?.rank ?? null,
-            best: rankScore,
+            rank: hasValidRank ? rank.rank : null,
+            best: hasValidRank ? rankScore : null,
             legacy,
             trainObj,
             bestId: bestSub?.id ?? null,
@@ -87,7 +89,7 @@ const trackCards = computed(() =>
             count: subs.length,
             lastAt: subs.at(-1)?.created_at ?? null,
             spark: objs,
-            participated: subs.length > 0 || !!rank,
+            participated: hasValidRank,
             top1: top1 ? { name: top1.display_name || top1.username, best: Number(top1.best_objective) } : null,
             top1Me,
             top1GapText,
@@ -408,7 +410,10 @@ async function savePassword() {
                 <div v-for="key in problemKeys" :key="key" :id="'sec-' + key" class="track-section">
                     <div class="mine-head">
                         <span class="mine-title">{{ rankMap.get(key)?.problem_name || probName(key) }}</span>
-                        <span v-if="rankMap.get(key)" class="mine-rank">
+                        <span v-if="rankMap.get(key)?.ranking_legacy" class="mine-rank">
+                            <span class="badge feature-badge">旧成绩未通过复核</span>
+                        </span>
+                        <span v-else-if="rankMap.get(key)" class="mine-rank">
                             <span class="rank-pill" :class="rankCls(rankMap.get(key).rank)"><template
                                     v-if="rankMap.get(key).rank <= 3">{{ ["🥇", "🥈", "🥉"][rankMap.get(key).rank - 1]
                                     }}</template>第 <b class="mono">{{ rankMap.get(key).rank }}</b> 名</span>
