@@ -50,6 +50,8 @@ const rec = ref(null);
 
 // 我在各赛道的名次（用于“与自己最优对比”）
 const myRanks = ref([]);
+// 平台实例（含每次进化的完整配置，通过 run_id 关联到 Run）
+const instances = ref([]);
 
 onMounted(async () => {
     runs.value = await api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []);
@@ -59,6 +61,7 @@ onMounted(async () => {
     recent.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
     if (getToken()) {
         myRanks.value = await api("/api/ranking/me").then(r => r.entries ?? []).catch(() => []);
+        instances.value = await api("/api/instances").then(r => r.instances ?? []).catch(() => []);
     }
     const runP = props.params.get("run");
     const idP = props.params.get("id");
@@ -527,6 +530,46 @@ const mineCompare = computed(() => {
     };
 });
 
+// ===== 本次进化使用的配置选项 =====
+const runInstance = computed(() => {
+    if (source.value?.type !== "run") return null;
+    return instances.value.find(i => Number(i.run_id) === Number(source.value.id)) ?? null;
+});
+const evoCfg = computed(() => {
+    if (source.value?.type === "run") return runInstance.value?.config ?? null;
+    return inst.value?.config ?? null;
+});
+// 展示用的配置行（统一两模式；值缺失显示 —）
+const cfgRows = computed(() => {
+    const c = evoCfg.value ?? {};
+    const custom = (source.value?.type === "run" ? runInstance.value?.framework_type : inst.value?.framework_type) === "custom";
+    const local = c.use_local_llm !== false;
+    const rows = [
+        { k: "框架类型", v: custom ? "自定义框架" : (FW_LABEL[c.framework_type] || c.framework_type || "—") },
+        { k: "种群容量", v: c.population_size ?? "—" },
+        { k: "进化代数", v: c.num_generations ?? "—" },
+        { k: "突变数", v: c.num_mutation ?? "—" },
+        { k: "杂交数", v: c.num_hybridization ?? "—" },
+        { k: "反思数", v: c.num_reflection ?? "—" },
+        { k: "策略更新数", v: c.num_policy_updates ?? "—" },
+        { k: "进化方向", v: c.ascend === false ? "适应度越大越好" : "适应度越小越好" },
+        { k: "模型来源", v: local ? "实验室本地 LLM" : "自有 API" },
+        { k: "模型", v: c.llm_model || "—" },
+        { k: "Base URL", v: c.llm_base_url || "—" },
+        { k: "函数名", v: c.fun_name || "—" },
+        { k: "函数参数个数", v: Array.isArray(c.fun_args) ? c.fun_args.length : "—" },
+        { k: "返回值个数", v: Array.isArray(c.fun_return) ? c.fun_return.length : "—" },
+    ];
+    if (custom) {
+        rows.push({ k: "框架文件", v: c.framework_filename || "framework.py" });
+        if (c.framework_id) rows.push({ k: "framework_id", v: c.framework_id });
+    }
+    return rows;
+});
+// 长文本选项（问题描述覆盖等）——有值才显示
+const overrideText = computed(() => evoCfg.value?.problem_override || "");
+const hasOverride = computed(() => overrideText.value.trim().length > 0);
+
 const problemLabel = computed(() => {
     if (source.value?.type === "run") return runProblemKey.value ?? "—";
     const pk = sub.value.problem_key || inst.value?.problem_key;
@@ -667,6 +710,24 @@ function genHint(g, gi) {
                     </div>
                     <button class="btn small primary" @click="savePrompt">保存提示词</button>
                     <span class="hint" style="margin-left: 8px">{{ promptState || "修改将注入下一代的进化提示" }}</span>
+                </div>
+            </div>
+
+            <div v-if="evoCfg" class="card">
+                <h2>⚙ 进化配置 <span class="tail">本次运行使用的选项</span></h2>
+                <div class="grid cols-2">
+                    <div>
+                        <div class="kv" v-for="r in cfgRows.slice(0, 8)" :key="r.k"><span class="k">{{ r.k }}</span><span
+                                class="mono" :title="String(r.v)">{{ r.v }}</span></div>
+                    </div>
+                    <div>
+                        <div class="kv" v-for="r in cfgRows.slice(8)" :key="r.k"><span class="k">{{ r.k }}</span><span
+                                class="mono" :title="String(r.v)">{{ r.v }}</span></div>
+                        <div class="field" style="margin-top: 8px" v-if="hasOverride">
+                            <label>问题描述覆盖（problem_override）</label>
+                            <p class="drawer-text" style="max-height: 96px; overflow-y: auto">{{ overrideText }}</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -823,25 +884,18 @@ function genHint(g, gi) {
                             <div class="u-name"><span class="u-main">{{ fullName(sub) }}</span><span class="u-sub mono">{{
                                 sub.username ?? "" }}</span></div>
                         </div>
-                        <div class="grid-2">
-                            <div class="kv"><span class="k">实例名称</span><span>{{ inst.name ?? "—" }}</span></div>
-                            <div class="kv"><span class="k">框架类型</span><FwBadge :ft="inst.framework_type" /></div>
-                        </div>
-                        <div class="grid-2">
-                            <div class="kv" v-if="inst.framework_type === 'custom'"><span class="k">框架文件</span><span
-                                    class="mono">{{ cfg.framework_filename || "framework.py" }}</span></div>
-                            <template v-else>
-                                <div class="kv"><span class="k">种群容量</span><span class="mono">{{ cfg.population_size ??
-                                    "—" }}</span></div>
-                                <div class="kv"><span class="k">进化代数</span><span class="mono">{{ cfg.num_generations ?? "—"
-                                    }}</span></div>
-                                <div class="kv"><span class="k">突变数</span><span class="mono">{{ cfg.num_mutation ?? "—"
-                                    }}</span></div>
-                                <div class="kv"><span class="k">杂交数</span><span class="mono">{{ cfg.num_hybridization ?? "—"
-                                    }}</span></div>
-                                <div class="kv"><span class="k">反思数</span><span class="mono">{{ cfg.num_reflection ?? "—"
-                                    }}</span></div>
-                            </template>
+                        <div class="kv"><span class="k">实例名称</span><span>{{ inst.name ?? "—" }}</span></div>
+                        <div class="grid cols-2" style="margin: 6px 0">
+                            <div>
+                                <div class="kv" v-for="r in cfgRows.slice(0, 7)" :key="r.k"><span class="k">{{ r.k
+                                    }}</span><span class="mono" :title="String(r.v)">{{ r.v }}</span></div>
+                            </div>
+                            <div>
+                                <div class="kv" v-for="r in cfgRows.slice(7)" :key="r.k"><span class="k">{{ r.k
+                                    }}</span><span class="mono" :title="String(r.v)">{{ r.v }}</span></div>
+                                <div class="kv" v-if="customCode"><span class="k">框架文件</span><span class="mono">{{
+                                    cfg.framework_filename || "framework.py" }}</span></div>
+                            </div>
                         </div>
                         <div class="field" style="margin-top: 10px">
                             <label>启发式思想</label>
