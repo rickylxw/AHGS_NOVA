@@ -1783,3 +1783,6 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
   font-size: 13.5px;
 }
 .vs-mine-ico { font-size: 16px; }
+
+/* 已失效旧成绩 */
+.strike { text-decoration: line-through; opacity: 0.6; }
