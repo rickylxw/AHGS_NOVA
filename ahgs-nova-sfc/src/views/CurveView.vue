@@ -876,6 +876,8 @@ function genHint(g, gi) {
                         <span class="mono" :title="'完整值：' + fullNum(mineCompare.myBest)">{{ fmtObj(mineCompare.myBest) }}</span>
                         <span v-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
                         <span v-if="mineCompare.failed" class="delta-down">🚫 该赛道暂无有效排名分（新评估未通过）</span>
+                        <span v-if="mineCompare.failed" class="delta-down">🚫 该赛道暂无有效排名分（新评估未通过）</span>
+                        <span v-else-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
                         <span v-else class="delta-down">距个人最优 +{{ mineCompare.deltaPct.toFixed(2) }}%（当前第 {{ mineCompare.rank }} 名）</span>
                         <span v-if="mineCompare.legacy" class="badge feature-badge"
                             title="该成绩沿用旧版评估，未通过新数据复核">旧成绩</span>
