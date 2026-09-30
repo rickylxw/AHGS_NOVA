@@ -512,9 +512,11 @@ const mineCompare = computed(() => {
     const cur = curObjective.value;
     const entry = myRankEntry.value;
     if (cur == null || !isFinite(Number(cur)) || !entry) return null;
-    // 平台重评后：ranking_score 是当前排名用分；best_objective 可能是旧成绩或 null
-    const myBest = Number(entry.ranking_score ?? entry.best_objective);
-    if (!isFinite(myBest) || myBest === 0) return null;
+    // ranking_score 为 null = 新评估未通过（holdout 未过），没有有效排名分
+    const myBest = Number(entry.ranking_score);
+    if (!isFinite(myBest)) {
+        return { failed: true, trainObj: entry.train_objective ?? null };
+    }
     const asc = isAscend(compareProblemKey.value);
     const deltaPct = asc
         ? (Number(cur) - myBest) / Math.abs(myBest) * 100
@@ -525,7 +527,6 @@ const mineCompare = computed(() => {
         cur: Number(cur),
         deltaPct,
         atBest: deltaPct <= 0.005,
-        legacy: entry.ranking_legacy === true,
         trainObj: entry.train_objective ?? null,
     };
 });
@@ -700,7 +701,8 @@ function genHint(g, gi) {
                     <span class="mono" style="font-weight: 800" :title="'完整值：' + fullNum(mineCompare.cur)">{{ fmtObj(mineCompare.cur) }}</span>
                     <span class="hint">vs 我的最好</span>
                     <span class="mono" :title="'完整值：' + fullNum(mineCompare.myBest)">{{ fmtObj(mineCompare.myBest) }}</span>
-                    <span v-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
+                    <span v-if="mineCompare.failed" class="delta-down">🚫 该赛道暂无有效排名分（新评估未通过）</span>
+                    <span v-else-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
                     <span v-else class="delta-down">距个人最优 +{{ mineCompare.deltaPct.toFixed(2) }}%（当前第 {{ mineCompare.rank }} 名）</span>
                 </div>
                 <div v-if="promptOpen" style="margin-top: 12px">
@@ -873,6 +875,7 @@ function genHint(g, gi) {
                         <span class="hint">vs 我的最好</span>
                         <span class="mono" :title="'完整值：' + fullNum(mineCompare.myBest)">{{ fmtObj(mineCompare.myBest) }}</span>
                         <span v-if="mineCompare.atBest" class="delta-up">🏆 已达个人最优（当前第 {{ mineCompare.rank }} 名）</span>
+                        <span v-if="mineCompare.failed" class="delta-down">🚫 该赛道暂无有效排名分（新评估未通过）</span>
                         <span v-else class="delta-down">距个人最优 +{{ mineCompare.deltaPct.toFixed(2) }}%（当前第 {{ mineCompare.rank }} 名）</span>
                         <span v-if="mineCompare.legacy" class="badge feature-badge"
                             title="该成绩沿用旧版评估，未通过新数据复核">旧成绩</span>

@@ -60,10 +60,10 @@ const trackCards = computed(() =>
         const top1Me = !!(top1 && store.user && top1.user_id === store.user.id);
         // 平台重评后的成绩体系：ranking_score 是当前排名用分；ranking_legacy=true 表示沿用旧成绩
         const rankScore = rank ? (rank.ranking_score ?? rank.best_objective) : null;
-        const legacy = rank ? rank.ranking_legacy === true : false;
         const trainObj = rank ? (rank.train_objective ?? null) : null;
-        // 只有通过新数据复核的名次才算有效参与；仅剩 legacy 旧成绩的赛道记为未参与
-        const hasValidRank = !!rank && !legacy;
+        // 有效性 = 有排名分（ranking_score）；为 null 即新评估未通过（holdout 未过）→ 记为未参与
+        const score = rank ? (rank.ranking_score ?? null) : null;
+        const hasValidRank = !!rank && score != null && isFinite(Number(score));
         let top1GapText = "";
         if (top1 && hasValidRank && rankScore != null && isFinite(Number(rankScore))) {
             const t = Number(top1.ranking_score ?? top1.best_objective);
@@ -79,7 +79,8 @@ const trackCards = computed(() =>
             fullName: p.name,
             asc,
             rank: hasValidRank ? rank.rank : null,
-            best: hasValidRank ? rankScore : null,
+            best: hasValidRank ? score : null,
+            failed: !!rank && score == null,
             legacy,
             trainObj,
             bestId: bestSub?.id ?? null,
@@ -380,7 +381,7 @@ async function savePassword() {
                                 c.rank }}名</span>
                             <span v-else class="tier-rank mono">—</span>
                             <span class="tier-best mono"
-                                :title="(c.legacy ? '旧版评估成绩（未通过新复核）' : '当前排名用分') + (c.trainObj != null ? '；新训练集成绩：' + fullNum(c.trainObj) : '') + (c.best != null ? '；完整值：' + fullNum(c.best) : '')">{{ c.best != null ? fmtObj(c.best) : "—" }}<span v-if="c.legacy" class="badge feature-badge"
+                                :title="(c.legacy ? '旧版评估成绩（未通过新复核）' : '当前排名用分') + (c.trainObj != null ? '；新训练集成绩：' + fullNum(c.trainObj) : '') + (c.best != null ? '；完整值：' + fullNum(c.best) : '')">{{ c.failed ? "🚫 holdout 未过" : c.best != null ? fmtObj(c.best) : "—" }}<span v-if="c.legacy" class="badge feature-badge"
                                 :title="'该成绩来自旧一轮评估；新训练集成绩：' + fullNum(c.trainObj ?? null)">旧评估</span></span>
                             <span class="tier-top1" :class="{ me: c.top1Me }"
                                 :title="c.top1 ? '第一名：' + c.top1.name : '暂无第一名'">
