@@ -544,6 +544,27 @@ tr.clickable-row:hover {
     background: var(--row-hover);
 }
 
+/* 我的页：详细提交记录折叠行（默认仅显示最近 3 条） */
+tr.fold-row td {
+    padding: 6px 8px;
+    text-align: center;
+}
+
+.fold-btn {
+    border-style: dashed;
+    color: var(--text-dim);
+}
+
+.fold-btn:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+}
+
+.fold-arrow {
+    margin-left: 4px;
+    font-size: 10px;
+}
+
 tr.rank-top3 {
     background: linear-gradient(90deg, rgba(251, 191, 36, .07), transparent 55%);
 }

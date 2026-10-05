@@ -139,6 +139,22 @@ function sortedSubs(key) {
         .sort((a, b) => (parseServerTime(b.created_at)?.getTime() ?? 0) - (parseServerTime(a.created_at)?.getTime() ?? 0));
 }
 
+/** 详细提交记录默认只展开最近 3 条，更早的折叠（可展开/收起） */
+const SUB_PREVIEW = 3;
+const expandedTracks = ref(new Set());
+function isExpanded(key) {
+    return expandedTracks.value.has(key);
+}
+function toggleTrack(key) {
+    const s = new Set(expandedTracks.value);
+    s.has(key) ? s.delete(key) : s.add(key);
+    expandedTracks.value = s;
+}
+function visibleSubs(key) {
+    const all = sortedSubs(key);
+    return isExpanded(key) || all.length <= SUB_PREVIEW ? all : all.slice(0, SUB_PREVIEW);
+}
+
 function probName(key) {
     return (store.problems.find(p => p.key === key) || {}).name || key;
 }
@@ -453,7 +469,7 @@ async function savePassword() {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="s in sortedSubs(key)" :key="s.id" class="clickable-row"
+                                <tr v-for="s in visibleSubs(key)" :key="s.id" class="clickable-row"
                                     @click="openSubmissionDrawer(s.id)">
                                     <td class="mono">{{ s.id }}</td>
                                     <td><FwBadge :ft="s.framework_type" /></td>
@@ -463,6 +479,16 @@ async function savePassword() {
                                     <td class="num mono">{{ fmtTokens(s.total_tokens) }}</td>
                                     <td class="mono hint">{{ fmtTime(s.created_at) }}</td>
                                     <td><button class="btn small" @click.stop="navToCurve(s.id)">曲线</button></td>
+                                </tr>
+                                <tr v-if="(subsByProblem[key] ?? []).length > SUB_PREVIEW" class="fold-row">
+                                    <td :colspan="7">
+                                        <button class="btn small fold-btn" @click="toggleTrack(key)"
+                                            :title="isExpanded(key) ? '收起较早的提交' : '默认仅显示最近 3 条提交'">
+                                            {{ isExpanded(key) ? "收起" : "展开其余 " + ((subsByProblem[key] ??
+                                                []).length - SUB_PREVIEW) + " 条" }}
+                                            <span class="fold-arrow">{{ isExpanded(key) ? "▴" : "▾" }}</span>
+                                        </button>
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
