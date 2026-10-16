@@ -155,6 +155,17 @@ function visibleSubs(key) {
     return isExpanded(key) || all.length <= SUB_PREVIEW ? all : all.slice(0, SUB_PREVIEW);
 }
 
+/** 实例 / 进化记录列表同样默认只显示最近 5 条，其余折叠（可展开/收起），避免页面过长 */
+const LIST_PREVIEW = 5;
+const instExpanded = ref(false);
+const runsExpanded = ref(false);
+const visibleInstances = computed(() =>
+    instExpanded.value || instances.value.length <= LIST_PREVIEW ? instances.value : instances.value.slice(0, LIST_PREVIEW)
+);
+const visibleRuns = computed(() =>
+    runsExpanded.value || runs.value.length <= LIST_PREVIEW ? runs.value : runs.value.slice(0, LIST_PREVIEW)
+);
+
 function probName(key) {
     return (store.problems.find(p => p.key === key) || {}).name || key;
 }
@@ -234,8 +245,9 @@ async function loadInstances() {
     ]);
     instances.value = i;
     runs.value = r;
-    // 涉及问题的第一名与我的名次（用于进化记录表的对比列）
-    const pkeys = [...new Set(runs.value.map(x => x.problem_key).filter(Boolean))];
+    // 涉及问题的第一名与我的名次（用于进化记录表的对比列）；自定义问题没有排行榜，跳过避免 404
+    const builtIn = new Set(store.problems.map(p => p.key));
+    const pkeys = [...new Set(runs.value.map(x => x.problem_key).filter(Boolean))].filter(k => builtIn.has(k));
     if (pkeys.length) {
         const [rankLists, myRanks] = await Promise.all([
             Promise.all(pkeys.map(k => api("/api/ranking/" + k).then(x => x.entries ?? []).catch(() => []))),
@@ -380,7 +392,7 @@ async function savePassword() {
         <h2>我的空间 <span class="tail">{{ meta }}</span></h2>
         <div class="chip-row" style="margin-bottom: 14px">
             <button class="chip" :class="{ on: tab === 'records' }" @click="tab = 'records'">名次与提交</button>
-            <button class="chip" :class="{ on: tab === 'instances' }" @click="tab = 'instances'">实例与进化记录</button>
+            <button class="chip" :class="{ on: tab === 'instances' }" @click="tab = 'instances'">进化记录与实例</button>
             <button class="chip" :class="{ on: tab === 'profile' }" @click="tab = 'profile'">个人资料</button>
         </div>
 
@@ -502,34 +514,8 @@ async function savePassword() {
         <div v-else-if="tab === 'instances'">
             <div class="loading-row" v-if="instLoading"><span class="spinner"></span>加载中…</div>
             <template v-else>
-                <div class="mine-head"><span class="mine-title">实例保存</span><span class="hint">点击「载入」把实例配置带到进化页</span>
-                </div>
-                <div v-if="!instances.length" class="hint">暂无保存的实例，可在进化页发起后保存。</div>
-                <div v-else class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>名称</th>
-                                <th>框架类型</th>
-                                <th>模型</th>
-                                <th>问题</th>
-                                <th>更新时间</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="i in instances" :key="i.id">
-                                <td><b>{{ i.name }}</b></td>
-                                <td><FwBadge :ft="i.framework_type" /></td>
-                                <td class="mono hint">{{ i.config?.llm_model ?? "—" }}</td>
-                                <td class="mono">{{ i.problem_key ?? "—" }}</td>
-                                <td class="mono hint">{{ i.updated_at ? fmtTime(i.updated_at) : "—" }}</td>
-                                <td><a class="btn small" href="#/evo">载入 →</a></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="mine-head"><span class="mine-title">AHG 进化记录</span></div>
+                <div class="mine-head"><span class="mine-title">AHG 进化记录</span><span class="hint">默认仅显示最近
+                        {{ LIST_PREVIEW }} 条</span></div>
                 <div v-if="!runs.length" class="hint">暂无进化记录。</div>
                 <div v-else class="table-wrap">
                     <table>
@@ -545,7 +531,7 @@ async function savePassword() {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="r in runs" :key="r.run_id">
+                            <tr v-for="r in visibleRuns" :key="r.run_id">
                                 <td class="num mono">{{ r.run_id }}</td>
                                 <td class="mono">{{ r.problem_key ?? "—" }}</td>
                                 <td><span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span></td>
@@ -553,6 +539,49 @@ async function savePassword() {
                                 <td class="tier-top1" :title="runTop1Text(r)">{{ runTop1Text(r) || "—" }}</td>
                                 <td class="mono">{{ runGapText(r) || "—" }}</td>
                                 <td><a class="btn small" :href="'#/curve?run=' + r.run_id">监控 →</a></td>
+                            </tr>
+                            <tr v-if="runs.length > LIST_PREVIEW" class="fold-row">
+                                <td :colspan="7">
+                                    <button class="btn small fold-btn" @click="runsExpanded = !runsExpanded"
+                                        :title="runsExpanded ? '收起较早的进化记录' : '默认仅显示最近 5 条进化记录'">{{
+                                        runsExpanded ? "收起" : "展开其余 " + (runs.length - LIST_PREVIEW) + " 条" }}
+                                        <span class="fold-arrow">{{ runsExpanded ? "▴" : "▾" }}</span></button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mine-head" style="margin-top: 18px"><span class="mine-title">实例保存</span><span class="hint">默认仅显示最近
+                        {{ LIST_PREVIEW }} 条 · 点击「载入」把实例配置带到进化页</span></div>
+                <div v-if="!instances.length" class="hint">暂无保存的实例，可在进化页发起后保存。</div>
+                <div v-else class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>框架类型</th>
+                                <th>模型</th>
+                                <th>问题</th>
+                                <th>更新时间</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="i in visibleInstances" :key="i.id">
+                                <td><b>{{ i.name }}</b></td>
+                                <td><FwBadge :ft="i.framework_type" /></td>
+                                <td class="mono hint">{{ i.config?.llm_model ?? "—" }}</td>
+                                <td class="mono">{{ i.problem_key ?? "—" }}</td>
+                                <td class="mono hint">{{ i.updated_at ? fmtTime(i.updated_at) : "—" }}</td>
+                                <td><a class="btn small" href="#/evo">载入 →</a></td>
+                            </tr>
+                            <tr v-if="instances.length > LIST_PREVIEW" class="fold-row">
+                                <td :colspan="6">
+                                    <button class="btn small fold-btn" @click="instExpanded = !instExpanded"
+                                        :title="instExpanded ? '收起较早的实例' : '默认仅显示最近 5 条实例'">{{
+                                        instExpanded ? "收起" : "展开其余 " + (instances.length - LIST_PREVIEW) + " 条" }}
+                                        <span class="fold-arrow">{{ instExpanded ? "▴" : "▾" }}</span></button>
+                                </td>
                             </tr>
                         </tbody>
                     </table>
