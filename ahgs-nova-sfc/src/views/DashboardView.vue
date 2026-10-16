@@ -14,6 +14,16 @@ import EmptyState from "../components/EmptyState.vue";
 const recent = ref([]);
 const rankings = ref([]);
 
+/** 与官方站一致：仅自己的提交（或 admin）可打开详情抽屉，他人的行打开用户卡片抽屉 */
+function isOwnSubmission(userId) {
+    return store.user?.role === "admin" || (store.user != null && userId != null && store.user.id === userId);
+}
+
+function onRowClick(s) {
+    if (isOwnSubmission(s.user_id)) openSubmissionDrawer(s.id);
+    else if (s.user_id != null) openUserDrawer(s.user_id);
+}
+
 onMounted(async () => {
     recent.value = await api("/api/submissions/recent?limit=300")
         .then(r => r.submissions ?? [])
@@ -169,7 +179,7 @@ const fwSegments = computed(() =>
                     </thead>
                     <tbody>
                         <tr v-for="s in recent.slice(0, 8)" :key="s.id" class="clickable-row"
-                            @click="openSubmissionDrawer(s.id)">
+                            @click="onRowClick(s)">
                             <td><UserCell :user="s" /></td>
                             <td>{{ s.problem_name || s.problem_key }}</td>
                             <td><FwBadge :ft="s.framework_type" /></td>

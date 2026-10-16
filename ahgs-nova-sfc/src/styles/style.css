@@ -716,6 +716,18 @@ th.num {
     font-weight: 600;
 }
 
+/* 排行榜：旧评估标准成绩 / holdout 留出段未过（与官方站语义一致） */
+.badge.rk-holdout {
+    color: #fb7185;
+    background: rgba(251, 113, 133, .11);
+    border-color: rgba(251, 113, 133, .35);
+    font-weight: 600;
+}
+
+.legacy-score {
+    color: #fbbf24;
+}
+
 .badge-row {
     display: flex;
     flex-wrap: wrap;

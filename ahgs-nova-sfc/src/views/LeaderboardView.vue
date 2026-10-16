@@ -34,6 +34,8 @@ const barView = ref(false);
 const auto = ref(false);
 const entries = ref([]);
 const ascend = ref(true);
+const cohort = ref("current"); // current = 主榜（新版评估标准）· legacy = 旧版排行榜
+const legacyAvailable = ref(false);
 const loading = ref(true);
 const err = ref("");
 let timer = null;
@@ -46,14 +48,47 @@ async function load() {
     if (types) qs.set("framework_types", types);
     const srcs = [...src].join(",");
     if (srcs) qs.set("model_sources", srcs);
+    if (cohort.value === "legacy") qs.set("cohort", "legacy");
     try {
         const r = await api(`/api/ranking/${problemKey.value}${qs.toString() ? "?" + qs : ""}`);
         entries.value = r.entries ?? [];
         ascend.value = r.ascend !== false;
+        legacyAvailable.value = r.legacy_available === true;
     } catch (e) {
         err.value = e.message;
     }
     loading.value = false;
+}
+
+function toggleCohort() {
+    cohort.value = cohort.value === "current" ? "legacy" : "current";
+    load();
+}
+
+/* 与官方站一致的展示口径：
+   有 ranking_score（已按新版标准评分）→ 显示 best_objective；
+   否则有训练分 → 回退显示 train_objective（此时标「holdout 未过」）；
+   否则显示 best_objective。ranking_legacy = 旧评估标准下的成绩。 */
+function isLegacyEntry(e) {
+    return e.ranking_legacy === true;
+}
+
+function isHoldoutPending(e) {
+    return (
+        !isLegacyEntry(e) && e.ranking_score == null && e.train_objective != null && Number.isFinite(e.train_objective)
+    );
+}
+
+function displayObjective(e) {
+    if (e.ranking_score != null && Number.isFinite(e.ranking_score)) return e.best_objective ?? null;
+    if (e.train_objective != null && Number.isFinite(e.train_objective)) return e.train_objective;
+    return e.best_objective ?? null;
+}
+
+function entryObjTitle(e) {
+    if (isLegacyEntry(e)) return "旧评估标准";
+    if (isHoldoutPending(e)) return "holdout 留出段评估未通过，回退显示训练分";
+    return "";
 }
 
 const visible = computed(() => {
@@ -75,24 +110,40 @@ const visible = computed(() => {
 
 const meta = computed(
     () =>
-        `${visible.value.length} 人上榜 · 适应度${ascend.value ? "越小" : "越大"}越好${fw.size || src.size ? " · 已按筛选过滤" : ""}`
+        `${visible.value.length} 人上榜 · 适应度${ascend.value ? "越小" : "越大"}越好${
+            cohort.value === "legacy" ? " · 旧版评估标准" : ""
+        }${fw.size || src.size ? " · 已按筛选过滤" : ""}`
 );
 
 const barRows = computed(() =>
     visible.value.slice(0, 15).map(e => ({
         rank: e.rank,
         label: fullName(e),
-        sub: `${e.username ?? ""} · ${FW_LABEL[e.framework_type] || "AHG"} · ${e.llm_model ?? ""}`,
-        value: Number(e.best_objective),
-        fmt: fmtObj(e.best_objective),
+        sub:
+            `${e.username ?? ""} · ${FW_LABEL[e.framework_type] || "AHG"} · ${e.llm_model ?? ""}` +
+            (isLegacyEntry(e) ? " · 旧评估标准" : isHoldoutPending(e) ? " · holdout 未过（训练分）" : ""),
+        value: Number(displayObjective(e)),
+        fmt: fmtObj(displayObjective(e)),
         submissionId: e.submission_id,
         userId: e.user_id,
     }))
 );
 
 function onBarOpen(row) {
-    if (row.submissionId) openSubmissionDrawer(row.submissionId);
+    if (row.submissionId && isOwnSubmission(row.userId)) openSubmissionDrawer(row.submissionId);
     else if (row.userId) openUserDrawer(row.userId);
+}
+
+/** 与官方站一致：仅自己的提交（或 admin）可打开详情抽屉，他人的行打开用户卡片抽屉 */
+function isOwnSubmission(userId) {
+    return store.user?.role === "admin" || (store.user != null && userId != null && store.user.id === userId);
+}
+
+function onRowClick(e) {
+    if (isOwnSubmission(e.user_id)) {
+        if (e.submission_id) openSubmissionDrawer(e.submission_id);
+        else if (e.user_id != null) openUserDrawer(e.user_id);
+    } else if (e.user_id != null) openUserDrawer(e.user_id);
 }
 
 function toggleFw(k) {
@@ -121,7 +172,7 @@ function exportCsv() {
         return;
     }
     const head =
-        "rank,user_id,username,display_name,framework_type,llm_model,model_source,best_objective,total_tokens,best_submitted_at,submission_id";
+        "rank,user_id,username,display_name,framework_type,llm_model,model_source,best_objective,train_objective,ranking_score,scoring_cohort,total_tokens,best_submitted_at,submission_id";
     const lines = list
         .map(e =>
             [
@@ -133,6 +184,9 @@ function exportCsv() {
                 e.llm_model,
                 e.model_source,
                 e.best_objective,
+                e.train_objective ?? "",
+                e.ranking_score ?? "",
+                e.scoring_cohort ?? "",
                 e.total_tokens ?? "",
                 e.best_submitted_at ?? "",
                 e.submission_id ?? "",
@@ -196,6 +250,10 @@ onUnmounted(() => {
                         "📊 条形图" }}</button>
                     <button class="chip" :class="{ on: auto }" @click="toggleAuto">⟳ 自动刷新</button>
                     <button class="chip" @click="exportCsv">⬇ 导出 CSV</button>
+                    <button v-if="cohort === 'legacy'" class="chip on" title="回到按当前评估标准计分的主榜"
+                        @click="toggleCohort">↩ 返回主榜</button>
+                    <button v-else-if="legacyAvailable" class="chip" title="按旧评估标准计分的排行"
+                        @click="toggleCohort">🗂 查看旧版排行榜</button>
                 </div>
             </div>
         </div>
@@ -214,7 +272,7 @@ onUnmounted(() => {
                         <th>框架</th>
                         <th>来源</th>
                         <th>模型</th>
-                        <th class="num">最优适应度</th>
+                        <th class="num">适应度</th>
                         <th class="num">所耗 token</th>
                         <th>最近提交</th>
                         <th></th>
@@ -222,13 +280,16 @@ onUnmounted(() => {
                 </thead>
                 <tbody>
                     <tr v-for="e in visible" :key="e.user_id ?? e.username" class="clickable-row"
-                        :class="{ 'rank-top3': e.rank <= 3 }" @click="openSubmissionDrawer(e.submission_id)">
+                        :class="{ 'rank-top3': e.rank <= 3 }" @click="onRowClick(e)">
                         <td class="num"><Medal :rank="e.rank" /></td>
                         <td><UserCell :user="e" /></td>
                         <td><FwBadge :ft="e.framework_type" /></td>
                         <td><SrcBadge :src="e.model_source" /></td>
                         <td class="mono hint">{{ e.llm_model || "—" }}</td>
-                        <td class="num mono">{{ fmtObj(e.best_objective) }}</td>
+                        <td class="num mono"><span :class="{ 'legacy-score': isLegacyEntry(e) }"
+                                :title="entryObjTitle(e)">{{ fmtObj(displayObjective(e)) }}</span><span
+                                v-if="isHoldoutPending(e)" class="badge rk-holdout" style="margin-left: 6px">holdout
+                                未过</span></td>
                         <td class="num mono">{{ fmtTokens(e.total_tokens) }}</td>
                         <td class="mono hint" :title="e.best_submitted_at || ''">{{ fmtTime(e.best_submitted_at) }}</td>
                         <td><button class="btn small" @click.stop="navToCurve(e.submission_id)">曲线</button></td>

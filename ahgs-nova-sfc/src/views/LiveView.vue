@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { api } from "../lib/api";
-import { store, openSubmissionDrawer } from "../lib/store";
+import { store, openSubmissionDrawer, openUserDrawer } from "../lib/store";
 import { fmtObj, fmtTokens, fmtTime, isAscend } from "../lib/format";
 import UserCell from "../components/UserCell.vue";
 import FwBadge from "../components/FwBadge.vue";
@@ -81,6 +81,16 @@ function toggleMine() {
     if (mineOnly.value) q.value = "";
 }
 
+/** 与官方站一致：仅自己的提交（或 admin）可打开详情抽屉，他人的行打开用户卡片抽屉 */
+function isOwnSubmission(userId) {
+    return store.user?.role === "admin" || (store.user != null && userId != null && store.user.id === userId);
+}
+
+function onRowClick(s) {
+    if (isOwnSubmission(s.user_id)) openSubmissionDrawer(s.id);
+    else if (s.user_id != null) openUserDrawer(s.user_id);
+}
+
 onMounted(() => {
     load();
     timer = setInterval(() => {
@@ -158,7 +168,7 @@ onUnmounted(() => clearInterval(timer));
                 </thead>
                 <tbody>
                     <tr v-for="s in sorted" :key="s.id" class="clickable-row" :class="{ 'fresh-row': freshIds.has(s.id) }"
-                        @click="openSubmissionDrawer(s.id)">
+                        @click="onRowClick(s)">
                         <td><UserCell :user="s" /></td>
                         <td>{{ s.problem_name || s.problem_key }}</td>
                         <td><FwBadge :ft="s.framework_type" /></td>

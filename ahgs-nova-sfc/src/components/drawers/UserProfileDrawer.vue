@@ -12,6 +12,11 @@ const u = ref(null);
 const subs = ref([]);
 const err = ref("");
 
+/** 后端收紧了权限：仅自己的提交（或 admin）可查看详情；他人的提交行不可点击（与官方站一致） */
+const canOpenDetail = computed(
+    () => store.user?.role === "admin" || (store.user != null && Number(props.uid) === store.user.id)
+);
+
 const byProblem = computed(() => {
     const m = new Map();
     for (const s of subs.value) {
@@ -86,7 +91,8 @@ onMounted(async () => {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="s in list" :key="s.id" class="clickable-row" @click="openSubmissionDrawer(s.id)">
+                            <tr v-for="s in list" :key="s.id" :class="{ 'clickable-row': canOpenDetail }"
+                                @click="canOpenDetail && openSubmissionDrawer(s.id)">
                                 <td class="mono">{{ s.id }}</td>
                                 <td class="mono">{{ fmtObj(s.objective) }}</td>
                                 <td><SrcBadge :src="s.model_source" /> <span class="mono hint">{{ s.llm_model || ""

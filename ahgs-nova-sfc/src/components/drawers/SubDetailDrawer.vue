@@ -17,7 +17,9 @@ const features = computed(() => d.value?.features ?? []);
 
 onMounted(async () => {
     try {
-        d.value = await api(`/api/submissions/${props.sid}`);
+        // 与官方站一致走 /record（{ submission, instance } 包装）；旧版扁平结构兜底
+        const r = await api(`/api/submissions/${props.sid}/record`);
+        d.value = r?.submission ?? r;
     } catch (e) {
         err.value = e.status === 401 ? "此内容需要登录后查看" : "加载失败：" + e.message;
     }

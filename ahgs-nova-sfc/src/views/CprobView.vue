@@ -120,6 +120,13 @@ async function exec() {
                 plan_id: planData.value.plan_id,
                 name: ag.name.trim() || undefined,
                 description: ag.desc.trim() || undefined,
+                source_dir: ag.src.trim() || undefined,
+                llm_config: {
+                    base_url: ag.baseUrl.trim(),
+                    model: ag.model.trim(),
+                    api_key: ag.apiKey.trim(),
+                    use_local_llm: ag.local,
+                },
             },
         });
         runId.value = r.run_id ?? r.id ?? null;
