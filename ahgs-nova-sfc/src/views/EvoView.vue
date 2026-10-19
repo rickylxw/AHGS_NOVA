@@ -1,10 +1,10 @@
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { api, getToken } from "../lib/api";
 import { EVO_DEFAULTS, FW_LABEL, STATUS_LABEL } from "../lib/constants";
 import { store, toast } from "../lib/store";
 import { navHash } from "../lib/router";
-import { fmtObj } from "../lib/format";
+import { fmtObj, parseServerTime } from "../lib/format";
 import EmptyState from "../components/EmptyState.vue";
 import CopyButton from "../components/CopyButton.vue";
 
@@ -13,6 +13,20 @@ const props = defineProps({ params: { type: URLSearchParams, default: () => new 
 const presets = ref([]);
 const instances = ref([]);
 const runs = ref([]);
+
+/** 进化记录默认折叠：仅显示最近 RUNS_PREVIEW 条，超出部分点击展开（按开始时间倒序） */
+const RUNS_PREVIEW = 8;
+const runsOpen = ref(false);
+const sortedRuns = computed(() =>
+    runs.value.slice().sort((a, b) => {
+        const ta = parseServerTime(a.started_at ?? a.created_at)?.getTime() ?? 0;
+        const tb = parseServerTime(b.started_at ?? b.created_at)?.getTime() ?? 0;
+        return tb - ta || (Number(b.run_id) || 0) - (Number(a.run_id) || 0);
+    })
+);
+const visibleRuns = computed(() =>
+    runsOpen.value || sortedRuns.value.length <= RUNS_PREVIEW ? sortedRuns.value : sortedRuns.value.slice(0, RUNS_PREVIEW)
+);
 const cfg = reactive({
     problem_key: props.params.get("problem") || store.problems[0]?.key || "",
     framework_type: "calm",
@@ -539,7 +553,7 @@ function fwName(ft) {
         </div>
 
         <div class="card">
-            <h2>我的进化记录 <span class="tail">点击「监控」查看实时曲线与控制</span></h2>
+            <h2>我的进化记录 <span class="tail">共 {{ sortedRuns.length }} 次 · 点击「监控」查看实时曲线与控制</span></h2>
             <div v-if="!runs.length" class="empty">
                 <div class="ico">🧫</div>
                 暂无进化记录，从上方发起第一次进化
@@ -556,12 +570,21 @@ function fwName(ft) {
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="r in runs" :key="r.run_id">
+                        <tr v-for="r in visibleRuns" :key="r.run_id">
                             <td class="num mono">{{ r.run_id }}</td>
                             <td>{{ r.problem_key ?? "—" }}</td>
                             <td><span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span></td>
                             <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
                             <td><a class="btn small" :href="'#/curve?run=' + r.run_id">监控 →</a></td>
+                        </tr>
+                        <tr v-if="sortedRuns.length > RUNS_PREVIEW" class="fold-row">
+                            <td :colspan="5">
+                                <button class="btn small fold-btn" @click="runsOpen = !runsOpen"
+                                    :title="runsOpen ? '收起较早的进化记录' : '默认仅显示最近 8 条记录'">
+                                    {{ runsOpen ? "收起" : "展开其余 " + (sortedRuns.length - RUNS_PREVIEW) + " 条" }}
+                                    <span class="fold-arrow">{{ runsOpen ? "▴" : "▾" }}</span>
+                                </button>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
