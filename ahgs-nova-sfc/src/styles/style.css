@@ -1819,3 +1819,99 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
 
 /* 已失效旧成绩 */
 .strike { text-decoration: line-through; opacity: 0.6; }
+
+/* ============ 站内通知（顶栏铃铛） ============ */
+.notif-btn {
+    position: relative;
+}
+
+.notif-badge {
+    position: absolute;
+    top: -4px;
+    right: -5px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--bad);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 16px;
+    text-align: center;
+    pointer-events: none;
+}
+
+.notif-panel {
+    width: min(400px, calc(100vw - 32px));
+    max-height: min(540px, 72vh);
+    overflow-y: auto;
+}
+
+.notif-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.notif-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.notif-item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+
+.notif-item:hover {
+    background: var(--row-hover);
+}
+
+.notif-item.unread {
+    border-color: var(--border-strong);
+    background: rgba(34, 211, 238, .05);
+}
+
+.notif-item-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.notif-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex: none;
+}
+
+.notif-title {
+    flex: 1;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.notif-time {
+    flex: none;
+    font-size: 12px;
+}
+
+.notif-content {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-dim);
+}

@@ -4,7 +4,7 @@ import { api, apiBase, getToken, isTokenExpired, getTokenExpiry, ApiError } from
 import { DEFAULT_API, LS } from "./lib/constants";
 import { store, applyTheme, closeDrawer, setSession, clearSession, logout, toast } from "./lib/store";
 import { route, getView, navHash, parseHash } from "./lib/router";
-import { fullName } from "./lib/format";
+import { fullName, fmtTime } from "./lib/format";
 import { APP_VERSION } from "./lib/version";
 import Avatar from "./components/Avatar.vue";
 import LoginModal from "./components/LoginModal.vue";
@@ -106,6 +106,54 @@ function resetApi() {
     location.reload();
 }
 
+/* ---------- 站内通知（官方 2026-10 起提供 /api/notifications） ---------- */
+const notifOpen = ref(false);
+const notifs = ref([]);
+const unread = ref(0);
+const notifBusy = ref(false);
+const expandedNotif = ref(null);
+let notifTimer = null;
+
+async function loadNotifs() {
+    if (!getToken() || isTokenExpired()) return;
+    try {
+        const r = await api("/api/notifications");
+        notifs.value = r.notifications ?? [];
+        unread.value = r.unread_count ?? 0;
+    } catch { /* 通知为附属功能，静默失败 */ }
+}
+
+async function markRead(n) {
+    if (n.read) return;
+    try {
+        await api(`/api/notifications/${n.id}/read`, { method: "POST" });
+        n.read = true;
+        unread.value = Math.max(0, unread.value - 1);
+    } catch { /* ignore */ }
+}
+
+async function markAllRead() {
+    notifBusy.value = true;
+    try {
+        await api("/api/notifications/read-all", { method: "POST" });
+        notifs.value.forEach(n => (n.read = true));
+        unread.value = 0;
+    } catch (e) {
+        toast(e.message, "err");
+    }
+    notifBusy.value = false;
+}
+
+function toggleNotifPanel() {
+    notifOpen.value = !notifOpen.value;
+    if (notifOpen.value) loadNotifs();
+}
+
+function toggleExpandNotif(n) {
+    expandedNotif.value = expandedNotif.value === n.id ? null : n.id;
+    markRead(n);
+}
+
 /* ---------- 用户菜单 / 退出登录 ---------- */
 function toggleUserMenu() {
     userMenuOpen.value = !userMenuOpen.value;
@@ -139,6 +187,7 @@ const onKey = ev => {
         settingsOpen.value = false;
             feedbackOpen.value = false;
         userMenuOpen.value = false;
+        notifOpen.value = false;
         navOpen.value = false;
     }
 };
@@ -147,6 +196,8 @@ const onClick = ev => {
         settingsOpen.value = false;
     if (userMenuOpen.value && !ev.target.closest(".popover") && !ev.target.closest(".user-chip"))
         userMenuOpen.value = false;
+    if (notifOpen.value && !ev.target.closest(".notif-panel") && !ev.target.closest(".notif-btn"))
+        notifOpen.value = false;
     if (navOpen.value && !ev.target.closest("#main-nav") && !ev.target.closest(".nav-toggle"))
         navOpen.value = false;
 };
@@ -159,12 +210,16 @@ onMounted(() => {
     expireTimer = setInterval(() => {
         if (store.user && getTokenExpiry() != null && Date.now() >= getTokenExpiry()) onSessionExpired();
     }, 30000);
+    // 每 60s 拉一次未读通知数（登录状态下）
+    notifTimer = setInterval(loadNotifs, 60000);
+    loadNotifs();
 });
 onUnmounted(() => {
     window.removeEventListener("ahgs:session-expired", onSessionExpired);
     document.removeEventListener("keydown", onKey);
     document.removeEventListener("click", onClick);
     if (expireTimer) clearInterval(expireTimer);
+    if (notifTimer) clearInterval(notifTimer);
 });
 </script>
 
@@ -213,6 +268,15 @@ onUnmounted(() => {
                     </template>
                 </svg>
             </button>
+            <button v-if="store.user" class="icon-btn notif-btn" title="通知" :aria-label="`通知，${unread} 条未读`"
+                @click="toggleNotifPanel">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+                </svg>
+                <span v-if="unread > 0" class="notif-badge">{{ unread > 99 ? "99+" : unread }}</span>
+            </button>
             <button v-if="!store.user" class="btn-login" @click="store.loginModal = true">登录 / 注册</button>
             <div v-else class="user-chip link-ish" title="账户菜单" @click="toggleUserMenu">
                 <Avatar :user="store.user" :size="26" /><b>{{ fullName(store.user) }}</b>
@@ -241,6 +305,24 @@ onUnmounted(() => {
                 <button class="btn" @click="resetApi">恢复默认</button>
             </div>
             <div class="hint" style="margin-top: 8px">{{ apiMsg }}</div>
+        </div>
+        <div v-if="notifOpen" class="popover notif-panel" style="right: 16px; top: 58px" @click.stop>
+            <div class="notif-head">
+                <h4 style="margin: 0">通知<span v-if="unread > 0" class="hint">（{{ unread }} 未读）</span></h4>
+                <button v-if="unread > 0" class="btn small" :disabled="notifBusy" @click="markAllRead">全部已读</button>
+            </div>
+            <div v-if="!notifs.length" class="hint" style="padding: 12px 0 4px">暂无通知</div>
+            <div v-else class="notif-list">
+                <div v-for="n in notifs" :key="n.id" class="notif-item" :class="{ unread: !n.read }"
+                    @click="toggleExpandNotif(n)">
+                    <div class="notif-item-head">
+                        <span v-if="!n.read" class="notif-dot" aria-label="未读"></span>
+                        <b class="notif-title">{{ n.title }}</b>
+                        <span class="hint notif-time">{{ fmtTime(n.created_at) }}</span>
+                    </div>
+                    <div v-if="expandedNotif === n.id" class="notif-content">{{ n.content }}</div>
+                </div>
+            </div>
         </div>
         <div v-if="userMenuOpen && store.user" class="popover" style="right: 16px; top: 58px" @click.stop>
             <h4>账户</h4>
