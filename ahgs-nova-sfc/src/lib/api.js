@@ -76,3 +76,16 @@ export async function api(path, { method = "GET", body } = {}) {
     if (resp.status === 204) return null;
     return resp.json();
 }
+
+/** 官方 2026-10 起 /api/instances 分页（{instances,total,has_more}）；跟随翻页取全量，
+ *  旧结构（直接返回全量 instances）自动兼容。上限 20×50=1000 条，防异常死循环。 */
+export async function fetchInstances() {
+    const out = [];
+    for (let page = 1; page <= 20; page++) {
+        const j = await api(`/api/instances?page=${page}&page_size=50`);
+        if (Array.isArray(j)) return j;
+        out.push(...(j.instances ?? []));
+        if (!j.has_more) break;
+    }
+    return out;
+}

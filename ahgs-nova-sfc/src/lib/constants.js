@@ -28,6 +28,20 @@ export const STATUS_LABEL = {
 export const STATUS_ACTIVE = new Set(["pending", "running", "paused"]);
 export const STATUS_DONE = new Set(["completed", "failed", "stopped"]);
 
+/** 官方 2026-10 起失败的 Run 携带 error_category/error_summary/error_message 等原因字段 */
+export const ERROR_CATEGORY = {
+    restart: "服务重启中断",
+    llm_auth: "模型认证失败",
+    llm_network: "模型网络异常",
+    llm_response: "模型输出异常",
+    evaluation: "评估失败",
+    framework: "框架执行异常",
+    checkpoint: "检查点缺失",
+    configuration: "配置或校验错误",
+    resource: "资源不足",
+    unknown: "未知错误",
+};
+
 export const CP_TASK_LABEL = {
     dataset_builder: "数据集构建脚本",
     evaluator: "评估器",

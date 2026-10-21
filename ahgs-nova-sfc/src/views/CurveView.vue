@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { api, getToken } from "../lib/api";
-import { STATUS_ACTIVE, STATUS_LABEL } from "../lib/constants";
+import { api, fetchInstances, getToken } from "../lib/api";
+import { STATUS_ACTIVE, STATUS_LABEL, ERROR_CATEGORY } from "../lib/constants";
 import { store, toast, openHeurDrawer } from "../lib/store";
 import { fmtObj, fmtTokens, fmtTime, fullName, isAscend, fullNum } from "../lib/format";
 import LineChart from "../charts/LineChart.vue";
@@ -37,6 +37,8 @@ const status = ref({});
 const results = ref(null);
 const pop = ref(null);
 const ctrlBusy = ref(false);
+const ctrlAction = ref(""); // 正在执行的 ctrl 动作 / "instance"（保存实例），用于按钮文案切换
+const savingPrompt = ref(false);
 const ctrlErr = ref("");
 const promptOpen = ref(false);
 const promptText = ref("");
@@ -61,7 +63,7 @@ onMounted(async () => {
     recent.value = await api("/api/submissions/recent?limit=50").then(r => r.submissions ?? []).catch(() => []);
     if (getToken()) {
         myRanks.value = await api("/api/ranking/me").then(r => r.entries ?? []).catch(() => []);
-        instances.value = await api("/api/instances").then(r => r.instances ?? []).catch(() => []);
+        instances.value = await fetchInstances().catch(() => []);
     }
     const runP = props.params.get("run");
     const idP = props.params.get("id");
@@ -241,6 +243,26 @@ const tokDeltaItems = computed(() =>
 );
 const isActive = computed(() => STATUS_ACTIVE.has(status.value.status));
 
+// 失败原因（官方 2026-10 起 failed 的 Run 携带 error_* 字段）
+const failCategory = computed(() => {
+    const c = status.value.error_category;
+    return c ? (ERROR_CATEGORY[c] ?? c) : "";
+});
+const failDetail = computed(() => {
+    if (status.value.error_message) return status.value.error_message;
+    const ctx = status.value.error_context;
+    if (ctx == null) return "";
+    try {
+        return JSON.stringify(ctx, null, 2);
+    } catch {
+        return String(ctx);
+    }
+});
+const failAt = computed(() => {
+    const t = status.value.error_occurred_at;
+    return t ? fmtTime(t) : "";
+});
+
 const CTRL_MSG = {
     stop: "已停止",
     pause: "已暂停",
@@ -249,9 +271,10 @@ const CTRL_MSG = {
 };
 
 async function ctrl(action) {
-    if (!source.value) return;
+    if (!source.value || ctrlBusy.value) return;
     ctrlErr.value = "";
     ctrlBusy.value = true;
+    ctrlAction.value = action;
     try {
         await api(`/api/evolution/${source.value.id}/${action}`, { method: "POST" });
         toast(CTRL_MSG[action] ?? "操作成功", "ok");
@@ -264,12 +287,15 @@ async function ctrl(action) {
         toast(ctrlErr.value, "err");
     } finally {
         ctrlBusy.value = false;
+        ctrlAction.value = "";
     }
 }
 
 async function saveInstance() {
+    if (ctrlBusy.value) return;
     ctrlErr.value = "";
     ctrlBusy.value = true;
+    ctrlAction.value = "instance";
     try {
         const snapshot = pop.value?.heuristics
             ? [{
@@ -304,6 +330,7 @@ async function saveInstance() {
         ctrlErr.value = e.message;
     } finally {
         ctrlBusy.value = false;
+        ctrlAction.value = "";
     }
 }
 
@@ -320,6 +347,8 @@ watch(promptOpen, async open => {
 });
 
 async function savePrompt() {
+    if (savingPrompt.value) return;
+    savingPrompt.value = true;
     try {
         const body = promptIsCode.value
             ? { framework_code: promptText.value }
@@ -329,6 +358,8 @@ async function savePrompt() {
         toast("提示词已保存", "ok");
     } catch (e) {
         promptState.value = "✘ " + e.message;
+    } finally {
+        savingPrompt.value = false;
     }
 }
 
@@ -581,6 +612,13 @@ function statusName(s) {
     return STATUS_LABEL[s] ?? s ?? "—";
 }
 
+/** 失败 Run 的悬停原因（官方 2026-10 起 error_* 字段；列表未携带时为空） */
+function runFailTitle(r) {
+    if (r.status !== "failed") return "";
+    const cat = r.error_category ? (ERROR_CATEGORY[r.error_category] ?? r.error_category) : "";
+    return [cat, r.error_summary].filter(Boolean).join("：");
+}
+
 function genHint(g, gi) {
     const tok = genStats.value[gi]?.tok;
     return g.sorted.length + " 个个体" + (tok != null ? " · " + fmtTokens(tok) + " tokens" : "");
@@ -620,7 +658,7 @@ function genHint(g, gi) {
                 <button class="btn primary" @click="goManual">分析</button>
                 <span v-if="source" class="badge feature-badge">{{ source.type === 'run' ? 'Run #' + source.id + '（实时监控）'
                     : '提交 #' + source.id }}</span>
-                <button v-if="isRunMode" class="btn small" style="margin-left: auto" @click="saveInstance">💾 保存实例</button>
+                <button v-if="isRunMode" class="btn small" style="margin-left: auto" :disabled="ctrlBusy" @click="saveInstance">{{ ctrlBusy && ctrlAction === 'instance' ? '⏳ 保存中…' : '💾 保存实例' }}</button>
             </div>
             <div v-if="recentRuns.length">
                 <div class="mine-head"><span class="mine-title">🕒 最近 Run</span>
@@ -630,7 +668,7 @@ function genHint(g, gi) {
                         :class="{ on: isCurrentRun(r.run_id) }" @click="openRun(r)">
                         <span class="rr-top">
                             <span class="rr-id mono">Run #{{ r.run_id }}</span>
-                            <span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span>
+                            <span class="badge" :class="'evo-st-' + r.status" :title="runFailTitle(r)">{{ statusName(r.status) }}</span>
                         </span>
                         <span class="rr-problem">{{ r.problem_key ?? "—" }}</span>
                         <span class="rr-best mono">最优 {{ fmtObj(r.best_objective) }}</span>
@@ -658,16 +696,24 @@ function genHint(g, gi) {
                     <span class="badge" :class="'evo-st-' + status.status" style="margin-left: 12px">{{
                         statusName(status.status) }}</span>
                     <span class="chip-row" style="margin-left: auto">
-                        <button class="btn small" :disabled="ctrlBusy || !isActive" @click="ctrl('pause')">⏸ 暂停</button>
+                        <button class="btn small" :disabled="ctrlBusy || !isActive" @click="ctrl('pause')">{{ ctrlBusy && ctrlAction === 'pause' ? '⏳ 暂停中…' : '⏸ 暂停' }}</button>
                         <button class="btn small" :disabled="ctrlBusy || status.status !== 'paused'"
-                            @click="ctrl('resume')">▶ 继续</button>
-                        <button class="btn small danger" :disabled="ctrlBusy || !isActive" @click="ctrl('stop')">⏹
-                            停止</button>
-                        <button class="btn small" :disabled="ctrlBusy" @click="ctrl('submit')">🏆 提交最优</button>
+                            @click="ctrl('resume')">{{ ctrlBusy && ctrlAction === 'resume' ? '⏳ 恢复中…' : '▶ 继续' }}</button>
+                        <button class="btn small danger" :disabled="ctrlBusy || !isActive" @click="ctrl('stop')">{{ ctrlBusy && ctrlAction === 'stop' ? '⏳ 停止中…' : '⏹ 停止' }}</button>
+                        <button class="btn small" :disabled="ctrlBusy" @click="ctrl('submit')">{{ ctrlBusy && ctrlAction === 'submit' ? '⏳ 提交中…' : '🏆 提交最优' }}</button>
                         <button class="btn small" @click="promptOpen = !promptOpen">📝 提示词</button>
                     </span>
                 </div>
                 <div class="error-banner" v-if="ctrlErr" style="margin-top: 8px">{{ ctrlErr }}</div>
+                <div class="error-banner" v-if="status.status === 'failed'" style="margin-top: 8px">
+                    <span v-if="failCategory" class="badge src-api" style="margin-right: 6px">{{ failCategory }}</span><b>失败原因：</b>{{ status.error_summary || "进化失败，请展开查看完整错误" }}<span v-if="failAt" class="hint" style="margin-left: 8px">{{ failAt }}</span>
+                    <details v-if="failDetail" style="margin-top: 6px">
+                        <summary class="hint" style="cursor: pointer">展开完整错误</summary>
+                        <pre class="mono"
+                            style="max-height: 240px; overflow: auto; background: var(--code-bg); padding: 10px; border-radius: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-all">{{
+                                failDetail }}</pre>
+                    </details>
+                </div>
                 <div class="grid cols-4" style="margin-top: 10px">
                     <div class="stat">
                         <div class="k">最优适应度</div>
@@ -710,7 +756,7 @@ function genHint(g, gi) {
                         <label>{{ promptIsCode ? "框架代码（framework_code）" : "提示词组件（components JSON）" }}</label>
                         <textarea v-model="promptText" spellcheck="false" class="input mono" rows="8"></textarea>
                     </div>
-                    <button class="btn small primary" @click="savePrompt">保存提示词</button>
+                    <button class="btn small primary" :disabled="savingPrompt" @click="savePrompt">{{ savingPrompt ? '⏳ 保存中…' : '保存提示词' }}</button>
                     <span class="hint" style="margin-left: 8px">{{ promptState || "修改将注入下一代的进化提示" }}</span>
                 </div>
             </div>

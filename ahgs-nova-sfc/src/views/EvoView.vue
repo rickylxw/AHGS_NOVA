@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
-import { api, getToken } from "../lib/api";
-import { EVO_DEFAULTS, FW_LABEL, STATUS_LABEL } from "../lib/constants";
+import { api, fetchInstances, getToken } from "../lib/api";
+import { EVO_DEFAULTS, ERROR_CATEGORY, FW_LABEL, STATUS_LABEL } from "../lib/constants";
 import { store, toast } from "../lib/store";
 import { navHash } from "../lib/router";
 import { fmtObj, parseServerTime } from "../lib/format";
@@ -66,12 +66,14 @@ const formErr = ref("");
 const starting = ref(false);
 const devRunning = ref(false);
 const fwState = ref("");
+const fwBusy = ref(false);
+const fwAction = ref(""); // "validate" | "upload"，用于按钮文案切换
 const validateOut = ref("");
 const fwfile = ref(null);
 
 onMounted(async () => {
     presets.value = await api("/api/llm-presets").then(r => r.presets ?? []).catch(() => []);
-    instances.value = await api("/api/instances").then(r => r.instances ?? []).catch(() => []);
+    instances.value = await fetchInstances().catch(() => []);
     runs.value = await api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []);
     // 恢复上次发起的配置（api_key 出于安全不保存）
     const saved = getSavedCfg();
@@ -188,6 +190,9 @@ function readFwFile(ev) {
 }
 
 async function validateFw() {
+    if (fwBusy.value) return;
+    fwBusy.value = true;
+    fwAction.value = "validate";
     fwState.value = "校验中…";
     try {
         const r = await api("/api/developer/validate", {
@@ -198,10 +203,16 @@ async function validateFw() {
         fwState.value = r && (r.valid ?? r.ok) !== false ? "✔ 校验通过" : "✘ 校验未通过";
     } catch (e) {
         fwState.value = "✘ " + e.message;
+    } finally {
+        fwBusy.value = false;
+        fwAction.value = "";
     }
 }
 
 async function uploadFw() {
+    if (fwBusy.value) return;
+    fwBusy.value = true;
+    fwAction.value = "upload";
     fwState.value = "上传中…";
     try {
         const r = await api("/api/developer/upload", {
@@ -216,6 +227,9 @@ async function uploadFw() {
         toast("框架已上传并加载", "ok");
     } catch (e) {
         fwState.value = "✘ " + e.message;
+    } finally {
+        fwBusy.value = false;
+        fwAction.value = "";
     }
 }
 
@@ -387,6 +401,13 @@ function statusName(st) {
     return STATUS_LABEL[st] ?? st ?? "—";
 }
 
+/** 失败 Run 的悬停原因（官方 2026-10 起 error_* 字段；列表未携带时为空） */
+function runFailTitle(r) {
+    if (r.status !== "failed") return "";
+    const cat = r.error_category ? (ERROR_CATEGORY[r.error_category] ?? r.error_category) : "";
+    return [cat, r.error_summary].filter(Boolean).join("：");
+}
+
 function fwName(ft) {
     return FW_LABEL[ft] || ft;
 }
@@ -479,8 +500,8 @@ function fwName(ft) {
                     <div class="chip-row" style="margin-bottom: 8px">
                         <button class="btn small" @click="fwfile.click()">📁 选择本地文件</button>
                         <input type="file" ref="fwfile" accept=".py" style="display: none" @change="readFwFile" />
-                        <button class="btn small" @click="validateFw">✔ 校验</button>
-                        <button class="btn small" @click="uploadFw">⬆ 上传并加载</button>
+                        <button class="btn small" :disabled="fwBusy" @click="validateFw">{{ fwBusy && fwAction === 'validate' ? '⏳ 校验中…' : '✔ 校验' }}</button>
+                        <button class="btn small" :disabled="fwBusy" @click="uploadFw">{{ fwBusy && fwAction === 'upload' ? '⏳ 上传中…' : '⬆ 上传并加载' }}</button>
                         <span class="hint">{{ fwState }}</span>
                     </div>
                     <div v-if="validateOut">
@@ -545,9 +566,9 @@ function fwName(ft) {
                 </div>
                 <div class="error-banner" v-if="formErr">{{ formErr }}</div>
                 <div class="chip-row">
-                    <button class="btn primary" :disabled="starting" @click="launch">🚀 启动进化</button>
+                    <button class="btn primary" :disabled="starting" @click="launch">{{ starting ? '⏳ 启动中…' : '🚀 启动进化' }}</button>
                     <button class="btn" v-if="cfg.framework_type === 'custom'" :disabled="devRunning"
-                        @click="devRun">▶ 开发者运行（framework_id）</button>
+                        @click="devRun">{{ devRunning ? '⏳ 提交中…' : '▶ 开发者运行（framework_id）' }}</button>
                 </div>
             </div>
         </div>
@@ -573,7 +594,7 @@ function fwName(ft) {
                         <tr v-for="r in visibleRuns" :key="r.run_id">
                             <td class="num mono">{{ r.run_id }}</td>
                             <td>{{ r.problem_key ?? "—" }}</td>
-                            <td><span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span></td>
+                            <td><span class="badge" :class="'evo-st-' + r.status" :title="runFailTitle(r)">{{ statusName(r.status) }}</span></td>
                             <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
                             <td><a class="btn small" :href="'#/curve?run=' + r.run_id">监控 →</a></td>
                         </tr>

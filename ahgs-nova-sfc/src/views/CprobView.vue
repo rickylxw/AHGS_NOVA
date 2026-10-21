@@ -22,6 +22,9 @@ const ag = reactive({
 });
 const agErr = ref("");
 const agPlanning = ref(false);
+const agExecuting = ref(false);
+const agApproving = ref(""); // "yes" | "no"，正在审批的方向
+const deleting = ref(""); // 正在删除的题目 key
 const agFeedback = ref("");
 const planData = ref(null);
 const runId = ref(null);
@@ -64,12 +67,16 @@ async function uploadFiles(ev) {
 async function del(p) {
     const key = p.problem_key ?? p.key;
     if (!window.confirm(`确认删除问题「${p.name || key}」？此操作不可撤销。`)) return;
+    if (deleting.value) return;
+    deleting.value = key;
     try {
         await api(`/api/custom-problems/${key}`, { method: "DELETE" });
         toast("已删除", "ok");
         loadList();
     } catch (e) {
         toast(e.message, "err");
+    } finally {
+        deleting.value = "";
     }
 }
 
@@ -112,6 +119,8 @@ async function plan() {
 }
 
 async function exec() {
+    if (agExecuting.value) return;
+    agExecuting.value = true;
     agErr.value = "";
     try {
         const r = await api("/api/custom-problems/agent/execute", {
@@ -136,6 +145,8 @@ async function exec() {
         }
     } catch (e) {
         agErr.value = e.message;
+    } finally {
+        agExecuting.value = false;
     }
 }
 
@@ -155,7 +166,8 @@ async function pollRun() {
 
 async function approve(approved) {
     const pf = runState.value.pending_file;
-    if (!pf) return;
+    if (!pf || agApproving.value) return;
+    agApproving.value = approved ? "yes" : "no";
     try {
         await api("/api/custom-problems/agent/approve", {
             method: "POST",
@@ -169,6 +181,8 @@ async function approve(approved) {
         pollRun();
     } catch (e) {
         toast(e.message, "err");
+    } finally {
+        agApproving.value = "";
     }
 }
 
@@ -220,7 +234,7 @@ onUnmounted(() => {
                                 false ? "越大越好" : "越小越好" }}</span></td>
                             <td>{{ p.category ?? "自定义" }}</td>
                             <td class="mono">{{ p.fun_name ?? "—" }}</td>
-                            <td><button v-if="loggedIn" class="btn small danger" @click="del(p)">删除</button></td>
+                            <td><button v-if="loggedIn" class="btn small danger" :disabled="deleting === (p.problem_key ?? p.key)" @click="del(p)">{{ deleting === (p.problem_key ?? p.key) ? '⏳ 删除中…' : '删除' }}</button></td>
                         </tr>
                     </tbody>
                 </table>
@@ -267,7 +281,7 @@ onUnmounted(() => {
                 <input v-model="ag.apiKey" style="max-width: 300px" />
             </div>
             <div class="error-banner" v-if="agErr">{{ agErr }}</div>
-            <button class="btn primary" :disabled="agPlanning" @click="plan">① 生成任务计划</button>
+            <button class="btn primary" :disabled="agPlanning" @click="plan">{{ agPlanning ? '⏳ 生成中…' : '① 生成任务计划' }}</button>
             <div v-if="planData" style="margin-top: 12px">
                 <div v-if="planData.meta?.name" class="section-note">计划名称：<b>{{ planData.meta.name }}</b>
                     <span v-if="planData.plan_id"> · plan_id <span class="mono">{{ planData.plan_id }}</span></span>
@@ -292,7 +306,7 @@ onUnmounted(() => {
                         </tbody>
                     </table>
                 </div>
-                <button class="btn primary" style="margin-top: 10px" @click="exec">② 执行计划</button>
+                <button class="btn primary" style="margin-top: 10px" :disabled="agExecuting" @click="exec">{{ agExecuting ? '⏳ 执行中…' : '② 执行计划' }}</button>
             </div>
             <div v-if="runId" style="margin-top: 12px">
                 <div class="grid cols-3">
@@ -319,8 +333,8 @@ onUnmounted(() => {
                         }}</span>（{{ CP_TASK_LABEL[runState.pending_file.type] ?? runState.pending_file.type ?? "文件"
                         }}）</label>
                     <div class="chip-row">
-                        <button class="btn small primary" @click="approve(true)">✔ 通过并继续</button>
-                        <button class="btn small danger" @click="approve(false)">✘ 拒绝</button>
+                        <button class="btn small primary" :disabled="!!agApproving" @click="approve(true)">{{ agApproving === 'yes' ? '⏳ 处理中…' : '✔ 通过并继续' }}</button>
+                        <button class="btn small danger" :disabled="!!agApproving" @click="approve(false)">{{ agApproving === 'no' ? '⏳ 处理中…' : '✘ 拒绝' }}</button>
                         <input class="input" v-model="agFeedback" placeholder="拒绝时的反馈意见" style="max-width: 280px" />
                     </div>
                     <div v-if="runState.pending_file.preview" class="code-container">
