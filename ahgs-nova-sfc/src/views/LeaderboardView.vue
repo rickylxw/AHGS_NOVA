@@ -115,6 +115,9 @@ const meta = computed(
         }${fw.size || src.size ? " · 已按筛选过滤" : ""}`
 );
 
+/** 所选题目的数据集/评估器版本（官方 2026-10 起 /api/problems 携带） */
+const problemMeta = computed(() => store.problems.find(p => p.key === problemKey.value) ?? null);
+
 const barRows = computed(() =>
     visible.value.slice(0, 15).map(e => ({
         rank: e.rank,
@@ -209,7 +212,11 @@ onUnmounted(() => {
 
 <template>
     <div class="card">
-        <h2>排行榜 <span class="tail">{{ meta }}</span></h2>
+        <h2>排行榜
+            <span v-if="problemMeta?.dataset_version" class="badge feature-badge" title="该赛道当前数据集版本">📦 数据集 {{ problemMeta.dataset_version }}</span>
+            <span v-if="problemMeta?.evaluator_version" class="badge src-local" title="该赛道当前评估器版本">🧮 评估器 {{ problemMeta.evaluator_version }}</span>
+            <span class="tail">{{ meta }}</span>
+        </h2>
         <div class="toolbar">
             <div class="field" style="min-width: 230px">
                 <label>问题情景</label>
