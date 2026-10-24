@@ -2,7 +2,12 @@
 import { DEFAULT_API, LS } from "./constants";
 
 export function apiBase() {
-    return (localStorage.getItem(LS.api) || DEFAULT_API).replace(/\/+$/, "");
+    const base = localStorage.getItem(LS.api) || DEFAULT_API;
+    // 平台 2026-10-23 起关闭跨域访问（CORS 预检一律 400），浏览器无法直连默认接口。
+    // 开发服务器（npm run dev）下默认地址改走 vite.config.js 的 /api 同源代理；
+    // 显式配置的其它接口地址（自建 mock 等）不受影响。
+    if (import.meta.env.DEV && base === DEFAULT_API) return "";
+    return base.replace(/\/+$/, "");
 }
 
 export function getToken() {
@@ -57,7 +62,7 @@ export async function api(path, { method = "GET", body } = {}) {
             body: body === undefined ? undefined : JSON.stringify(body),
         });
     } catch {
-        throw new ApiError(0, "网络错误：无法连接到 " + apiBase() + "（请在右上角设置里检查接口地址）");
+        throw new ApiError(0, "网络错误：无法连接到 " + (apiBase() || "同源接口（开发代理）") + "（请在右上角设置里检查接口地址）");
     }
     if (!resp.ok) {
         let detail = resp.statusText || String(resp.status);
@@ -88,7 +93,7 @@ export async function downloadFile(path, fallbackName = "download.bin") {
     try {
         resp = await fetch(apiBase() + path, { headers });
     } catch {
-        throw new ApiError(0, "网络错误：无法连接到 " + apiBase() + "（请在右上角设置里检查接口地址）");
+        throw new ApiError(0, "网络错误：无法连接到 " + (apiBase() || "同源接口（开发代理）") + "（请在右上角设置里检查接口地址）");
     }
     if (!resp.ok) {
         let detail = resp.statusText || String(resp.status);

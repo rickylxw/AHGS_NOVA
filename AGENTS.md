@@ -17,7 +17,10 @@ edition frontend moved to their own monorepo on 2026-10-10, see the table).
 Each subfolder has its own `AGENTS.md` with edition-specific commands, wiring, and gotchas.
 
 All three talk to the same remote backend (default `http://10.201.186.15:8090`, set per-browser in
-localStorage `nova_api_base`; CORS is enabled server-side). Nothing in this repo can run the backend.
+localStorage `nova_api_base`). Since the platform update on 2026-10-23 the backend **rejects all cross-origin
+browser calls** (CORS preflights 400, no `Allow-Origin` headers) — the older editions still call it directly
+and will fail from a browser; `ahgs-nova-sfc` dev mode routes `/api` through a Vite proxy instead. Nothing in
+this repo can run the backend.
 
 ## Commands
 

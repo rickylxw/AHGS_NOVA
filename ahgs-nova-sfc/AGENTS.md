@@ -18,8 +18,12 @@ There is no test framework. Minimum verification bar for any change: `npm run bu
 routes open with no console errors. For rendering/layout alignment work, compare DOMs via a mock API + headless
 Chrome (see "Parity with the older editions" below).
 
-The backend defaults to `http://10.201.186.15:8090` (`DEFAULT_API` in `src/lib/constants.js`). Without the real
-backend, point localStorage key `nova_api_base` at your own mock (full CORS is fine) and fake the login state
+The backend defaults to `http://10.201.186.15:8090` (`DEFAULT_API` in `src/lib/constants.js`). **Since the
+platform update on 2026-10-23 the server rejects all cross-origin browser calls** (CORS preflights get 400,
+no `Access-Control-Allow-Origin` on anything), so browsers can no longer hit it from another origin. In the
+dev server (`npm run dev`) `apiBase()` therefore falls back to same-origin, and `vite.config.js` proxies
+`/api` to the backend — do not remove either half of that pairing. A custom localStorage `nova_api_base`
+(stored value differing from `DEFAULT_API`, e.g. your own full-CORS mock) still wins. Fake the login state
 with the `ahgs_token` / `ahgs_user` localStorage keys.
 
 ## Layout
