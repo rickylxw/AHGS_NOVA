@@ -1294,6 +1294,13 @@ th.num {
     border-color: rgba(251, 191, 36, .4);
 }
 
+/* queued（排队等待资源）与 pending 同义，同色 */
+.badge.evo-st-queued {
+    color: #fcd34d;
+    background: rgba(251, 191, 36, .11);
+    border-color: rgba(251, 191, 36, .4);
+}
+
 .badge.evo-st-paused {
     color: #c4b5fd;
     background: rgba(167, 139, 250, .13);

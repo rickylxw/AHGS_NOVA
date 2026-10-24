@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
-import { api, fetchInstances, getToken } from "../lib/api";
+import { api, downloadFile, fetchInstances, getToken } from "../lib/api";
 import { EVO_DEFAULTS, ERROR_CATEGORY, FW_LABEL, STATUS_LABEL } from "../lib/constants";
 import { store, toast } from "../lib/store";
 import { navHash } from "../lib/router";
@@ -187,6 +187,51 @@ function readFwFile(ev) {
             cfg.framework_code = t;
             cfg.framework_filename = f.name;
         });
+}
+
+async function readFwTemplate() {
+    if (fwBusy.value) return;
+    fwBusy.value = true;
+    fwAction.value = "template";
+    fwState.value = "加载示例中…";
+    try {
+        const r = await api("/api/developer/templates");
+        if (typeof r?.framework_code === "string" && r.framework_code) {
+            cfg.framework_code = r.framework_code;
+            cfg.framework_filename = "framework.py";
+            fwState.value = "📄 已载入官方示例 framework.py，可直接修改后上传";
+        } else {
+            fwState.value = "✘ 平台未返回示例模板";
+        }
+    } catch (e) {
+        fwState.value = "✘ " + e.message;
+    } finally {
+        fwBusy.value = false;
+        fwAction.value = "";
+    }
+}
+
+/** 官方 2026-10-23 起：下载「最小运行实例包」（ZIP，含新版示例 framework.py 与本地运行脚手架） */
+async function downloadPkg() {
+    if (fwBusy.value) return;
+    fwBusy.value = true;
+    fwAction.value = "download";
+    fwState.value = "下载中…";
+    try {
+        const { blob, filename } = await downloadFile("/api/developer/minimal-package", "ahgs-developer-minimal.zip");
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        fwState.value = "📦 最小运行实例包已下载：" + filename;
+    } catch (e) {
+        fwState.value = "✘ " + e.message;
+    } finally {
+        fwBusy.value = false;
+        fwAction.value = "";
+    }
 }
 
 async function validateFw() {
@@ -485,7 +530,8 @@ function fwName(ft) {
 
                 <div v-if="cfg.framework_type === 'custom'">
                     <div class="mine-head"><span class="mine-title">自定义进化框架</span><span class="hint">上传
-                            framework.py，平台加载后随进化启动</span></div>
+                            framework.py，平台加载后随进化启动；支持分阶段策略：可在 framework.py 中按代数或进度切换策略（STAGE_MODE /
+                            STAGES，官方示例默认关闭，无网页端阶段配置控件）</span></div>
                     <div class="field">
                         <label>框架文件名</label>
                         <input v-model="cfg.framework_filename" />
@@ -500,6 +546,8 @@ function fwName(ft) {
                     <div class="chip-row" style="margin-bottom: 8px">
                         <button class="btn small" @click="fwfile.click()">📁 选择本地文件</button>
                         <input type="file" ref="fwfile" accept=".py" style="display: none" @change="readFwFile" />
+                        <button class="btn small" :disabled="fwBusy" title="从平台拉取官方示例 framework.py 填入编辑器" @click="readFwTemplate">{{ fwBusy && fwAction === 'template' ? '⏳ 加载中…' : '📄 查看示例 framework.py 脚本' }}</button>
+                        <button class="btn small" :disabled="fwBusy" title="下载含本地运行脚手架与示例的最小实例包（ZIP）" @click="downloadPkg">{{ fwBusy && fwAction === 'download' ? '⏳ 下载中…' : '📦 下载最小运行实例包' }}</button>
                         <button class="btn small" :disabled="fwBusy" @click="validateFw">{{ fwBusy && fwAction === 'validate' ? '⏳ 校验中…' : '✔ 校验' }}</button>
                         <button class="btn small" :disabled="fwBusy" @click="uploadFw">{{ fwBusy && fwAction === 'upload' ? '⏳ 上传中…' : '⬆ 上传并加载' }}</button>
                         <span class="hint">{{ fwState }}</span>

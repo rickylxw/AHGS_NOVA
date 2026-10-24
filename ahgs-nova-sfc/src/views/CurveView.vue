@@ -291,6 +291,27 @@ async function ctrl(action) {
     }
 }
 
+/** 官方 2026-10-23 起 queued（排队中）的 Run 可取消排队 */
+async function cancelQueue() {
+    if (!source.value || ctrlBusy.value) return;
+    ctrlErr.value = "";
+    ctrlBusy.value = true;
+    ctrlAction.value = "cancelQueue";
+    try {
+        await api(`/api/evolution/${source.value.id}/queue`, { method: "DELETE" });
+        toast("已取消排队", "ok");
+        try {
+            status.value = await api(`/api/evolution/${source.value.id}/status`);
+        } catch { /* ignore */ }
+    } catch (e) {
+        ctrlErr.value = "操作失败：" + e.message;
+        toast(ctrlErr.value, "err");
+    } finally {
+        ctrlBusy.value = false;
+        ctrlAction.value = "";
+    }
+}
+
 async function saveInstance() {
     if (ctrlBusy.value) return;
     ctrlErr.value = "";
@@ -696,14 +717,16 @@ function genHint(g, gi) {
                     <span class="badge" :class="'evo-st-' + status.status" style="margin-left: 12px">{{
                         statusName(status.status) }}</span>
                     <span class="chip-row" style="margin-left: auto">
-                        <button class="btn small" :disabled="ctrlBusy || !isActive" @click="ctrl('pause')">{{ ctrlBusy && ctrlAction === 'pause' ? '⏳ 暂停中…' : '⏸ 暂停' }}</button>
+                        <button class="btn small" :disabled="ctrlBusy || !isActive || status.status === 'queued'" @click="ctrl('pause')">{{ ctrlBusy && ctrlAction === 'pause' ? '⏳ 暂停中…' : '⏸ 暂停' }}</button>
                         <button class="btn small" :disabled="ctrlBusy || status.status !== 'paused'"
                             @click="ctrl('resume')">{{ ctrlBusy && ctrlAction === 'resume' ? '⏳ 恢复中…' : '▶ 继续' }}</button>
-                        <button class="btn small danger" :disabled="ctrlBusy || !isActive" @click="ctrl('stop')">{{ ctrlBusy && ctrlAction === 'stop' ? '⏳ 停止中…' : '⏹ 停止' }}</button>
+                        <button class="btn small danger" :disabled="ctrlBusy || !isActive || status.status === 'queued'" @click="ctrl('stop')">{{ ctrlBusy && ctrlAction === 'stop' ? '⏳ 停止中…' : '⏹ 停止' }}</button>
+                        <button v-if="status.status === 'queued'" class="btn small danger" :disabled="ctrlBusy" @click="cancelQueue">{{ ctrlBusy && ctrlAction === 'cancelQueue' ? '⏳ 取消中…' : '✖ 取消排队' }}</button>
                         <button class="btn small" :disabled="ctrlBusy" @click="ctrl('submit')">{{ ctrlBusy && ctrlAction === 'submit' ? '⏳ 提交中…' : '🏆 提交最优' }}</button>
                         <button class="btn small" @click="promptOpen = !promptOpen">📝 提示词</button>
                     </span>
                 </div>
+                <div v-if="status.status === 'queued'" class="hint" style="margin-top: 8px">任务正在等待执行资源，可取消排队。</div>
                 <div class="error-banner" v-if="ctrlErr" style="margin-top: 8px">{{ ctrlErr }}</div>
                 <div class="error-banner" v-if="status.status === 'failed'" style="margin-top: 8px">
                     <span v-if="failCategory" class="badge src-api" style="margin-right: 6px">{{ failCategory }}</span><b>失败原因：</b>{{ status.error_summary || "进化失败，请展开查看完整错误" }}<span v-if="failAt" class="hint" style="margin-left: 8px">{{ failAt }}</span>

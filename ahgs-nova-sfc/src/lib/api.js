@@ -77,6 +77,37 @@ export async function api(path, { method = "GET", body } = {}) {
     return resp.json();
 }
 
+/** 下载需登录的文件（官方 2026-10-23 起 /api/developer/minimal-package 返回 ZIP）。
+ *  与 api() 一致地附带 Authorization 与错误处理，返回 { blob, filename }
+ *  （filename 优先取 Content-Disposition，缺省用 fallbackName）。 */
+export async function downloadFile(path, fallbackName = "download.bin") {
+    const headers = {};
+    const t = getToken();
+    if (t) headers.Authorization = `Bearer ${t}`;
+    let resp;
+    try {
+        resp = await fetch(apiBase() + path, { headers });
+    } catch {
+        throw new ApiError(0, "网络错误：无法连接到 " + apiBase() + "（请在右上角设置里检查接口地址）");
+    }
+    if (!resp.ok) {
+        let detail = resp.statusText || String(resp.status);
+        try {
+            const j = await resp.json();
+            detail = j.detail || j.message || JSON.stringify(j);
+        } catch { /* keep statusText */ }
+        if (resp.status === 401 && getToken()) {
+            try {
+                window.dispatchEvent(new CustomEvent("ahgs:session-expired"));
+            } catch { /* ignore */ }
+        }
+        throw new ApiError(resp.status, detail);
+    }
+    const blob = await resp.blob();
+    const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(resp.headers.get("Content-Disposition") || "");
+    return { blob, filename: m ? decodeURIComponent(m[1]) : fallbackName };
+}
+
 /** 官方 2026-10 起 /api/instances 分页（{instances,total,has_more}）；跟随翻页取全量，
  *  旧结构（直接返回全量 instances）自动兼容。上限 20×50=1000 条，防异常死循环。 */
 export async function fetchInstances() {

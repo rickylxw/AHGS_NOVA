@@ -16,7 +16,10 @@ export const FW_LABEL = {
     custom: "自定义框架",
 };
 
+/** 官方 2026-10-23 起 Run 新增 queued（排队等待执行资源）状态，语义与 pending 相同，
+ *  可经 DELETE /api/evolution/{id}/queue 取消排队 */
 export const STATUS_LABEL = {
+    queued: "排队中",
     pending: "排队中",
     running: "运行中",
     paused: "已暂停",
@@ -25,7 +28,7 @@ export const STATUS_LABEL = {
     failed: "失败",
 };
 
-export const STATUS_ACTIVE = new Set(["pending", "running", "paused"]);
+export const STATUS_ACTIVE = new Set(["queued", "pending", "running", "paused"]);
 export const STATUS_DONE = new Set(["completed", "failed", "stopped"]);
 
 /** 官方 2026-10 起失败的 Run 携带 error_category/error_summary/error_message 等原因字段 */

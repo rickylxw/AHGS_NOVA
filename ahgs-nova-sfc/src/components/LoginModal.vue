@@ -16,6 +16,11 @@ const showPw = ref(false);
 const showCfm = ref(false);
 const err = ref("");
 const busy = ref(false);
+// 官方 2026-10 起《用户须知》带版本号（/api/auth/terms → {version, effective_date}）
+const terms = ref("");
+api("/api/auth/terms")
+    .then(t => { terms.value = `版本：${t.version}（生效日期：${t.effective_date}）`; })
+    .catch(() => { /* 拉不到版本号不影响登录 */ });
 
 // 打开弹窗时恢复「记住的账号密码」（弹窗为 v-if 挂载，每次打开都会执行）
 try {
@@ -135,7 +140,8 @@ async function submit() {
                     </div>
                 </div>
                 <label class="check-row"><input type="checkbox" v-model="remember" />记住账号和密码</label>
-                <label class="check-row"><input type="checkbox" v-model="agree" />我已阅读并同意平台《用户须知》</label>
+                <label class="check-row"><input type="checkbox" v-model="agree" />我已阅读并同意平台《用户须知》<span
+                        v-if="terms" class="hint" style="margin-left: 6px">{{ terms }}</span></label>
                 <div class="error-banner" v-if="err">{{ err }}</div>
                 <button class="btn primary" style="width: 100%" type="submit" :disabled="busy">
                     {{ mode === 'register' ? '注册并登录' : '登录' }}</button>
