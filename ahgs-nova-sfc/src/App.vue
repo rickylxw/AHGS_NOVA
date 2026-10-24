@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { api, apiBase, getToken, isTokenExpired, getTokenExpiry, ApiError } from "./lib/api";
+import { api, apiBase, displayApiBase, getToken, isTokenExpired, getTokenExpiry, ApiError } from "./lib/api";
 import { DEFAULT_API, LS } from "./lib/constants";
 import { store, applyTheme, closeDrawer, setSession, clearSession, logout, toast } from "./lib/store";
 import { route, getView, navHash, parseHash } from "./lib/router";
@@ -16,7 +16,7 @@ const settingsOpen = ref(false);
 const feedbackOpen = ref(false);
 const userMenuOpen = ref(false);
 const navOpen = ref(false);
-const apiInput = ref(apiBase());
+const apiInput = ref(displayApiBase());
 const apiMsg = ref("");
 const year = new Date().getFullYear();
 const REPO_URL = "https://github.com/rickylxw/AHGS_NOVA";
@@ -345,7 +345,7 @@ onUnmounted(() => {
             <div class="loading-row"><span class="spinner"></span>加载中…</div>
         </div>
         <div v-else-if="bootErr" class="card">
-            <div class="error-banner">无法连接平台接口（{{ apiBase() }}）：{{ bootErr }}</div>
+            <div class="error-banner">无法连接平台接口（{{ displayApiBase() }}）：{{ bootErr }}</div>
             <p class="hint">请确认平台已启动，或点击右上角 ⚙ 修改接口地址。</p>
         </div>
         <component v-else :is="currentView" :params="route.params" :key="routeKey" />
@@ -356,8 +356,7 @@ onUnmounted(() => {
         <span>© {{ year }} Rickylxw, Midairlogn ·
             <a :href="REPO_URL" target="_blank" rel="noopener">GitHub</a> ·
             <a href="#" @click.prevent="feedbackOpen = true">问题反馈</a> · GPLv3</span>
-        <span id="footer-api" class="mono"><a :href="apiBase()" target="_blank" rel="noopener">{{ apiBase()
-        }}</a></span>
+        <span id="footer-api" class="mono"><a :href="displayApiBase()" target="_blank" rel="noopener">{{ displayApiBase() }}</a></span>
     </footer>
 
     <DrawerHost />

@@ -10,6 +10,12 @@ export function apiBase() {
     return base.replace(/\/+$/, "");
 }
 
+/** 展示用接口地址：DEV 同源代理模式下 apiBase() 为空字符串，
+ *  页脚链接 / 设置输入框 / 错误提示等展示处回退显示平台地址 */
+export function displayApiBase() {
+    return apiBase() || DEFAULT_API;
+}
+
 export function getToken() {
     return localStorage.getItem(LS.token) || "";
 }
