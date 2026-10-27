@@ -57,9 +57,7 @@ const sorted = computed(() => {
     if (mineOnly.value && store.user) list = list.filter(s => s.user_id === store.user.id);
     const qq = q.value.trim().toLowerCase();
     if (qq)
-        list = list.filter(
-            s => (s.username || "").toLowerCase().includes(qq) || (s.display_name || "").toLowerCase().includes(qq)
-        );
+        list = list.filter(s => (s.display_name || "").toLowerCase().includes(qq));
     if (sortBy.value === "score") {
         const asc = problem.value ? isAscend(problem.value) : true;
         list = [...list].sort((a, b) =>
@@ -131,7 +129,7 @@ onUnmounted(() => clearInterval(timer));
             </div>
             <div class="field" style="min-width: 150px">
                 <label>按用户过滤</label>
-                <input v-model="q" :disabled="mineOnly" :placeholder="mineOnly ? '「只看我的」已开启' : '用户名 / 昵称'" />
+                <input v-model="q" :disabled="mineOnly" :placeholder="mineOnly ? '「只看我的」已开启' : '昵称'" />
             </div>
             <div class="field">
                 <label>&nbsp;</label>

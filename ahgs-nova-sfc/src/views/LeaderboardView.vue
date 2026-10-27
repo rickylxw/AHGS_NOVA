@@ -95,9 +95,7 @@ const visible = computed(() => {
     let list = entries.value;
     const qq = q.value.trim().toLowerCase();
     if (qq)
-        list = list.filter(
-            e => (e.username || "").toLowerCase().includes(qq) || (e.display_name || "").toLowerCase().includes(qq)
-        );
+        list = list.filter(e => (e.display_name || "").toLowerCase().includes(qq));
     if (sortBy.value === "time")
         list = [...list].sort(
             (a, b) =>
@@ -123,7 +121,7 @@ const barRows = computed(() =>
         rank: e.rank,
         label: fullName(e),
         sub:
-            `${e.username ?? ""} · ${FW_LABEL[e.framework_type] || "AHG"} · ${e.llm_model ?? ""}` +
+            `${FW_LABEL[e.framework_type] || "AHG"} · ${e.llm_model ?? ""}` +
             (isLegacyEntry(e) ? " · 旧评估标准" : isHoldoutPending(e) ? " · holdout 未过（训练分）" : ""),
         value: Number(displayObjective(e)),
         fmt: fmtObj(displayObjective(e)),
@@ -175,13 +173,13 @@ function exportCsv() {
         return;
     }
     const head =
-        "rank,user_id,username,display_name,framework_type,llm_model,model_source,best_objective,train_objective,ranking_score,scoring_cohort,total_tokens,best_submitted_at,submission_id";
+        "rank,user_id,public_id,display_name,framework_type,llm_model,model_source,best_objective,train_objective,ranking_score,scoring_cohort,total_tokens,best_submitted_at,submission_id";
     const lines = list
         .map(e =>
             [
                 e.rank,
                 e.user_id,
-                e.username,
+                e.public_id ?? "",
                 e.display_name,
                 e.framework_type,
                 e.llm_model,
@@ -248,7 +246,7 @@ onUnmounted(() => {
             </div>
             <div class="field" style="min-width: 170px">
                 <label>搜索用户</label>
-                <input v-model="q" placeholder="昵称 / 一卡通号" />
+                <input v-model="q" placeholder="昵称" />
             </div>
             <div class="field">
                 <label>&nbsp;</label>
