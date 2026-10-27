@@ -1,5 +1,5 @@
 /* ============ AHGS NOVA · HTTP API ============ */
-import { DEFAULT_API, LS } from "./constants";
+import { DEFAULT_API, PLATFORM_API, LS } from "./constants";
 
 // 官方平台 2026-10 收紧 CORS 后，早期在设置里保存过的官方直连地址跨源必被浏览器拦截。
 // 启动时自动清掉这个已失效的旧值，回落到同源默认，免去逐个浏览器手动「恢复默认」。
@@ -19,10 +19,10 @@ export function apiBase() {
     return base.replace(/\/+$/, "");
 }
 
-/** 展示用接口地址：DEV 同源代理模式下 apiBase() 为空字符串，
+/** 展示用接口地址：apiBase() 为空字符串（同源模式）时，
  *  页脚链接 / 设置输入框 / 错误提示等展示处回退显示平台地址 */
 export function displayApiBase() {
-    return apiBase() || DEFAULT_API;
+    return apiBase() || PLATFORM_API;
 }
 
 export function getToken() {

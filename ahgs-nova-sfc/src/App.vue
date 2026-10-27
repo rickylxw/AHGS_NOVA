@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api, apiBase, displayApiBase, getToken, isTokenExpired, getTokenExpiry, ApiError } from "./lib/api";
-import { DEFAULT_API, LS } from "./lib/constants";
+import { PLATFORM_API, LS } from "./lib/constants";
 import { store, applyTheme, closeDrawer, setSession, clearSession, logout, toast } from "./lib/store";
 import { route, getView, navHash, parseHash } from "./lib/router";
 import { fullName, fmtTime } from "./lib/format";
@@ -297,9 +297,9 @@ onUnmounted(() => {
             <h4>接口设置 <span class="hint">{{ APP_VERSION }}</span></h4>
             <div class="field">
                 <label>API 基地址</label>
-                <input v-model="apiInput" :placeholder="DEFAULT_API" />
+                <input v-model="apiInput" :placeholder="PLATFORM_API" />
             </div>
-            <div class="hint" style="margin: 4px 0 10px">默认 {{ DEFAULT_API }}；若本页与平台同域部署，可填相对地址。</div>
+            <div class="hint" style="margin: 4px 0 10px">默认同源（相对地址，部署机反代 /api）；官方已禁止跨源直连，仅页面与平台同域部署时可填 {{ PLATFORM_API }}。</div>
             <div style="display: flex; gap: 8px">
                 <button class="btn primary" style="flex: 1" @click="saveApi">保存并测试</button>
                 <button class="btn" @click="resetApi">恢复默认</button>

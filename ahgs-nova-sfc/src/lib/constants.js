@@ -1,6 +1,11 @@
 /* ============ AHGS NOVA · 常量 ============ */
 
-export const DEFAULT_API = "http://10.201.186.15:8090";
+/** 请求基址默认同源相对地址：官方 2026-10-23 起 CORS 仅放行同源，生产页面必须
+ *  与 /api 同源（部署机反代网关或与平台同域托管）；跨源直连一律被浏览器拦截。 */
+export const DEFAULT_API = "";
+
+/** 展示用平台地址（页脚 / 设置占位 / 错误提示的回退显示），不作请求基址 */
+export const PLATFORM_API = "http://10.201.186.15:8090";
 
 export const LS = {
     token: "ahgs_token",
