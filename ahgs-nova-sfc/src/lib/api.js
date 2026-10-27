@@ -1,6 +1,15 @@
 /* ============ AHGS NOVA · HTTP API ============ */
 import { DEFAULT_API, LS } from "./constants";
 
+// 官方平台 2026-10 收紧 CORS 后，早期在设置里保存过的官方直连地址跨源必被浏览器拦截。
+// 启动时自动清掉这个已失效的旧值，回落到同源默认，免去逐个浏览器手动「恢复默认」。
+// （须在组件读取 apiBase() 之前执行，故放在模块顶层；重复执行无副作用。）
+const LEGACY_DIRECT_API = "http://10.201.186.15:8090";
+const savedApi = localStorage.getItem(LS.api);
+if (savedApi && savedApi.replace(/\/+$/, "") === LEGACY_DIRECT_API) {
+    localStorage.removeItem(LS.api);
+}
+
 export function apiBase() {
     const base = localStorage.getItem(LS.api) || DEFAULT_API;
     // 平台 2026-10-23 起关闭跨域访问（CORS 预检一律 400），浏览器无法直连默认接口。
