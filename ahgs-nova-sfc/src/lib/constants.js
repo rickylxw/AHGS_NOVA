@@ -50,6 +50,11 @@ export const ERROR_CATEGORY = {
     unknown: "未知错误",
 };
 
+/** 站内通知分类（通知条目携带 category；已知取值 track，未知值界面原样显示） */
+export const NOTIF_CATEGORY = {
+    track: "赛道公告",
+};
+
 export const CP_TASK_LABEL = {
     dataset_builder: "数据集构建脚本",
     evaluator: "评估器",

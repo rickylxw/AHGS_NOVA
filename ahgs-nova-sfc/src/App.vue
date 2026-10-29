@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api, apiBase, displayApiBase, getToken, isTokenExpired, getTokenExpiry, ApiError } from "./lib/api";
-import { PLATFORM_API, LS } from "./lib/constants";
+import { NOTIF_CATEGORY, PLATFORM_API, LS } from "./lib/constants";
 import { store, applyTheme, closeDrawer, setSession, clearSession, logout, toast } from "./lib/store";
 import { route, getView, navHash, parseHash } from "./lib/router";
 import { fullName, fmtTime } from "./lib/format";
@@ -317,6 +317,7 @@ onUnmounted(() => {
                     @click="toggleExpandNotif(n)">
                     <div class="notif-item-head">
                         <span v-if="!n.read" class="notif-dot" aria-label="未读"></span>
+                        <span v-if="n.category" class="badge feature-badge">{{ NOTIF_CATEGORY[n.category] ?? n.category }}</span>
                         <b class="notif-title">{{ n.title }}</b>
                         <span class="hint notif-time">{{ fmtTime(n.created_at) }}</span>
                     </div>
