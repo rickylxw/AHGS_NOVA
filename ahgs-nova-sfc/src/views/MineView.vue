@@ -4,7 +4,7 @@ import { api, getToken, getStoredUser } from "../lib/api";
 import { STATUS_LABEL } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
 import { navToCurve } from "../lib/router";
-import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, isAscend, fullNum } from "../lib/format";
+import { downloadBlob, fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, isAscend, fullNum } from "../lib/format";
 import Sparkline from "../charts/Sparkline.vue";
 import FwBadge from "../components/FwBadge.vue";
 import SrcBadge from "../components/SrcBadge.vue";
@@ -131,6 +131,152 @@ function jumpTo(key) {
         behavior: "smooth",
         block: "start",
     });
+}
+
+/* ---------- 成绩海报导出（Canvas 手绘，无第三方依赖） ---------- */
+const imgBusy = ref(false);
+
+function cardRankColor(rank) {
+    if (rank === 1) return "#fbbf24";
+    if (rank === 2) return "#c7d5f0";
+    if (rank === 3) return "#e8a06c";
+    if (rank != null) return "#22d3ee";
+    return "#5e6c92";
+}
+
+async function exportScoreCard() {
+    if (imgBusy.value) return;
+    imgBusy.value = true;
+    try {
+        const cards = [...trackCards.value].sort((a, b) => {
+            if (a.participated !== b.participated) return a.participated ? -1 : 1;
+            return (a.rank ?? 999) - (b.rank ?? 999);
+        });
+        const W = 900, PAD = 40, ROW_H = 46, headH = 152, footH = 58;
+        const top3 = cards.filter(c => c.rank != null && c.rank <= 3).length;
+        const totalSubs = cards.reduce((a, c) => a + c.count, 0);
+        const H = headH + cards.length * ROW_H + footH;
+        const dpr = 2; // 固定 2 倍超采样，导出图清晰
+        const cv = document.createElement("canvas");
+        cv.width = W * dpr;
+        cv.height = H * dpr;
+        const ctx = cv.getContext("2d");
+        ctx.scale(dpr, dpr);
+
+        // 背景：深色渐变 + 顶部青色光晕
+        const bg = ctx.createLinearGradient(0, 0, 0, H);
+        bg.addColorStop(0, "#070b17");
+        bg.addColorStop(1, "#101a36");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
+        const glow = ctx.createRadialGradient(W / 2, -80, 30, W / 2, -80, 460);
+        glow.addColorStop(0, "rgba(34,211,238,.16)");
+        glow.addColorStop(1, "rgba(34,211,238,0)");
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, W, 320);
+
+        const sans = '"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif';
+        const mono = '"JetBrains Mono",Consolas,monospace';
+        ctx.textBaseline = "alphabetic";
+
+        // 标题
+        ctx.font = `700 30px ${sans}`;
+        ctx.fillStyle = "#e8eeff";
+        const brand = "AHGS NOVA";
+        ctx.fillText(brand, PAD, 62);
+        ctx.fillStyle = "#22d3ee";
+        ctx.fillText(" · 个人成绩单", PAD + ctx.measureText(brand).width, 62);
+
+        // 用户与汇总
+        ctx.font = `500 17px ${sans}`;
+        ctx.fillStyle = "#93a1c4";
+        ctx.fillText(`${fullName(store.user)} 的各赛道成绩 · ${new Date().toLocaleDateString("zh-CN")}`, PAD, 92);
+        ctx.font = `600 15px ${sans}`;
+        ctx.fillStyle = "#a78bfa";
+        ctx.fillText(
+            `参与 ${participatedCount.value}/${cards.length} 赛道 · 前三 ${top3} 项 · 累计提交 ${totalSubs} 条`,
+            PAD, 120
+        );
+
+        // 表头线
+        ctx.strokeStyle = "rgba(148,178,255,.25)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(PAD, headH - 20);
+        ctx.lineTo(W - PAD, headH - 20);
+        ctx.stroke();
+
+        // 各赛道行（已参与按名次在前，未参与置底置灰）
+        ctx.font = `600 17px ${sans}`;
+        ctx.fillStyle = "#5e6c92";
+        const col = { rank: 210, best: 330, gap: 520, tok: 700, cnt: 812 };
+        ctx.fillText("名次", col.rank, headH - 2);
+        ctx.fillText("适应度", col.best, headH - 2);
+        ctx.fillText("与榜首", col.gap, headH - 2);
+        ctx.fillText("token", col.tok, headH - 2);
+        ctx.fillText("提交", col.cnt, headH - 2);
+
+        let y = headH + 30;
+        for (const c of cards) {
+            const dim = !c.participated;
+            ctx.font = `600 17px ${sans}`;
+            ctx.fillStyle = dim ? "#5e6c92" : "#e8eeff";
+            ctx.fillText(c.name, PAD, y);
+
+            if (c.failed) {
+                ctx.font = `600 15px ${sans}`;
+                ctx.fillStyle = "#fb7185";
+                ctx.fillText("🚫 holdout 未过", col.rank, y);
+            } else if (dim) {
+                ctx.font = `500 15px ${sans}`;
+                ctx.fillStyle = "#5e6c92";
+                ctx.fillText("未参与", col.rank, y);
+            } else {
+                ctx.font = `700 17px ${sans}`;
+                ctx.fillStyle = cardRankColor(c.rank);
+                ctx.fillText(`第 ${c.rank} 名`, col.rank, y);
+            }
+
+            ctx.font = `500 16px ${mono}`;
+            ctx.fillStyle = dim ? "#5e6c92" : "#e8eeff";
+            ctx.fillText(c.best != null && !c.failed ? fmtObj(c.best) : "—", col.best, y);
+
+            const gap = (c.top1GapText || "").replace(/[（）]/g, "");
+            ctx.font = `500 15px ${sans}`;
+            if (gap) {
+                ctx.fillStyle = c.top1Me ? "#34d399" : "#93a1c4";
+                ctx.fillText(c.top1Me ? "已是榜首" : gap, col.gap, y);
+            } else if (!dim && c.top1) {
+                ctx.fillStyle = "#5e6c92";
+                ctx.fillText("—", col.gap, y);
+            }
+
+            ctx.font = `400 15px ${mono}`;
+            ctx.fillStyle = dim ? "#5e6c92" : "#93a1c4";
+            ctx.fillText(c.tokens ? fmtTokens(c.tokens) : "—", col.tok, y);
+            ctx.fillText(c.count ? String(c.count) : "—", col.cnt, y);
+
+            y += ROW_H;
+        }
+
+        // 页脚
+        ctx.font = `400 13px ${sans}`;
+        ctx.fillStyle = "#5e6c92";
+        const now = new Date();
+        const ts = `${now.toLocaleDateString("zh-CN")} ${now.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
+        ctx.fillText("AHGS NOVA · Vue SFC 生成", PAD, H - 24);
+        ctx.fillText(ts, W - PAD - ctx.measureText(ts).width, H - 24);
+
+        const blob = await new Promise(res => cv.toBlob(res, "image/png"));
+        if (!blob) throw new Error("画布导出失败");
+        const name = (store.user?.display_name || store.user?.username || "me").replace(/[\\/:*?"<>| ]/g, "_");
+        downloadBlob(`NOVA成绩单_${name}_${now.toISOString().slice(0, 10)}.png`, blob);
+        toast("成绩图已导出", "ok");
+    } catch (e) {
+        toast(e.message || "导出失败", "err");
+    } finally {
+        imgBusy.value = false;
+    }
 }
 
 function sortedSubs(key) {
@@ -402,6 +548,9 @@ async function savePassword() {
             <template v-else>
                 <div id="sec-summary" class="records-block">
                     <div class="mine-head"><span class="mine-title">📊 各赛道速览</span>
+                        <button class="btn small" style="margin-left: 12px" :disabled="imgBusy"
+                            title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
+                            imgBusy ? "⏳ 生成中…" : "📤 导出成绩图" }}</button>
                         <span class="hint">共 {{ trackCards.length }} 个赛道 · {{ participatedCount }} 个已参与 ·
                             按名次分组，点击行跳到下方详情</span>
                     </div>

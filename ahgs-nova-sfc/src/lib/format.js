@@ -50,6 +50,15 @@ export function downloadText(filename, text, mime = "text/csv;charset=utf-8") {
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
+/** 下载本地生成的二进制 Blob（如 Canvas 导出的图片），流程同 downloadText */
+export function downloadBlob(filename, blob) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
 /** 复制文本：优先 Clipboard API，不可用/失败时回退 execCommand（非安全上下文）；resolve 为是否成功 */
 export function copyText(text) {
     const finish = ok => {
