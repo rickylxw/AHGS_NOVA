@@ -467,7 +467,7 @@ async function exportScoreCard() {
         ctx.font = F.foot;
         ctx.fillStyle = P.faint;
         ctx.fillText("成绩为当前排名用分（ranking_score），越小越好 · 悬停数值可查看完整精度", cx0, footCY);
-        const ts = `${now.toLocaleDateString("zh-CN")} ${now.toLocaleTimeString("zh-CN", { hour12: false })} 生成`;
+        const ts = `${now.toLocaleDateString("zh-CN")} ${now.toLocaleTimeString("zh-CN", { hour12: false })}`;
         const brand = "AHGS NOVA · Vue SFC 生成";
         ctx.fillText(ts, cardX + cardW - CARD_PAD_X - mw(brand, F.foot) - 12 - mw(ts, F.foot), footCY);
         ctx.fillText(brand, cardX + cardW - CARD_PAD_X - mw(brand, F.foot), footCY);
@@ -841,6 +841,9 @@ async function savePassword() {
     </div>
     <div v-else class="card">
         <h2>我的空间 <span class="tail">{{ meta }}
+                <button class="btn small" style="margin-left: 8px" :disabled="imgBusy"
+                    title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
+                    imgBusy ? "⏳ 生成中…" : "📤 导出成绩图" }}</button>
                 <button class="btn small" style="margin-left: 8px" title="各赛道名次一览"
                     @click="openRankCard">🏆 名次总览</button></span></h2>
         <div class="chip-row" style="margin-bottom: 14px">
@@ -855,9 +858,6 @@ async function savePassword() {
             <template v-else>
                 <div id="sec-summary" class="records-block">
                     <div class="mine-head"><span class="mine-title">📊 各赛道速览</span>
-                        <button class="btn small" style="margin-left: 12px" :disabled="imgBusy"
-                            title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
-                            imgBusy ? "⏳ 生成中…" : "📤 导出成绩图" }}</button>
                         <span class="hint">共 {{ trackCards.length }} 个赛道 · {{ participatedCount }} 个已参与 ·
                             按名次分组，点击行跳到下方详情</span>
                     </div>
