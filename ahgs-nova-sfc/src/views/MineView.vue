@@ -16,6 +16,7 @@ const props = defineProps({ params: { type: URLSearchParams, default: () => new 
 const TABS = ["records", "instances", "profile"];
 const tab = ref(TABS.includes(props.params.get("tab")) ? props.params.get("tab") : "records");
 const recordsLoading = ref(true);
+const recordsLoadedOnce = ref(false); // loadRecords 至少完整跑完一次（名次/榜首数据已就绪）
 const instLoading = ref(true);
 const profileLoading = ref(true);
 const ranks = ref([]);
@@ -186,13 +187,18 @@ async function exportScoreCard() {
     if (imgBusy.value) return;
     imgBusy.value = true;
     try {
-        // 页面刚打开 / 未进过「名次与提交」页签时数据尚未加载：先等数据就绪再绘制，避免导出空图
-        if (!trackCards.value.length) {
+        // 名次/榜首数据未就绪时导出的图会全是「未参加」：先等 loadRecords 完整跑完（必要时触发一次）
+        for (let i = 0; i < 2 && (recordsLoading.value || !recordsLoadedOnce.value); i++) {
             if (!recordsLoading.value) loadRecords();
-            await new Promise(resolve => {
-                const stop = watch(() => recordsLoading.value, loading => {
-                    if (!loading) { stop(); resolve(); }
-                }, { immediate: true });
+            await Promise.race([
+                new Promise(resolve => {
+                    const stop = watch(() => recordsLoading.value, loading => {
+                        if (!loading) { stop(); resolve(); }
+                    }, { immediate: true });
+                }),
+                new Promise(resolve => setTimeout(resolve, 10000)), // 兜底：陈旧的 loading 态超时后强制重载
+            ]).then(() => {
+                if (recordsLoading.value) recordsLoading.value = false; // 超时说明没有真实加载在跑，重置陈旧状态
             });
         }
         const cards = [...trackCards.value].sort((a, b) => {
@@ -660,6 +666,7 @@ watch(tab, t => {
     } catch { /* ignore */ }
     if (t === "instances") loadInstances();
     else if (t === "profile") loadProfile();
+    else if (t === "records" && !recordsLoadedOnce.value && !recordsLoading.value) loadRecords();
 });
 watch(
     () => props.params.get("tab"),
@@ -695,6 +702,7 @@ async function loadRecords() {
         if (top) m.set(p.key, top);
     });
     top1Map.value = m;
+    recordsLoadedOnce.value = true;
     recordsLoading.value = false;
 }
 
