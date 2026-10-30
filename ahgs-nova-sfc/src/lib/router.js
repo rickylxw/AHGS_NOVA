@@ -7,7 +7,6 @@ import LiveView from "../views/LiveView.vue";
 import EvoView from "../views/EvoView.vue";
 import CprobView from "../views/CprobView.vue";
 import CurveView from "../views/CurveView.vue";
-import CompareView from "../views/CompareView.vue";
 import MineView from "../views/MineView.vue";
 
 const VIEWS = {
@@ -17,7 +16,6 @@ const VIEWS = {
     evo: EvoView,
     cprob: CprobView,
     curve: CurveView,
-    compare: CompareView,
     mine: MineView,
 };
 

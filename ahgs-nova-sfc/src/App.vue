@@ -29,7 +29,6 @@ const navItems = [
     { name: "evo", label: "进化" },
     { name: "cprob", label: "自定义问题" },
     { name: "curve", label: "进化分析" },
-    { name: "compare", label: "对比" },
     { name: "mine", label: "我的" },
 ];
 
