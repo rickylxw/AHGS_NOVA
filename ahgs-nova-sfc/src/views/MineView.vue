@@ -892,9 +892,52 @@ async function savePassword() {
                 <button class="drawer-close" aria-label="关闭" @click="closeRankCard">×</button>
             </div>
             <div class="rank-card-meta hint">{{ rankCardMeta }}</div>
-            <div class="rank-card-cols mono"><span>名次</span><span>赛道</span><span>与榜首</span><span
-                    class="num col-tok">Σtoken</span><span class="num col-cnt">提交</span><span
-                    class="num col-last">最近提交</span><span class="num">最好成绩</span></div>
+            <div class="rank-card-cols">
+                <span title="名次">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <circle cx="12" cy="8" r="6" />
+                        <path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" />
+                    </svg>名次</span>
+                <span title="赛道">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                        <line x1="4" x2="4" y1="22" y2="15" />
+                    </svg>赛道</span>
+                <span title="与榜首差距">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="M22 7l-8.5 8.5-5-5L2 17" />
+                        <path d="M16 7h6v6" />
+                    </svg>与榜首</span>
+                <span class="num col-tok" title="该赛道累计 token 消耗">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <ellipse cx="12" cy="5" rx="9" ry="3" />
+                        <path d="M3 5v14A9 3 0 0 0 21 19V5" />
+                        <path d="M3 12A9 3 0 0 0 21 12" />
+                    </svg>Σtoken</span>
+                <span class="num col-cnt" title="提交次数">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <path d="m22 2-7 20-4-9-9-4Z" />
+                        <path d="M22 2 11 13" />
+                    </svg>提交</span>
+                <span class="num col-last" title="最近一次提交时间">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                    </svg>最近提交</span>
+                <span class="num" title="当前排名用分（越小越好）">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="6" />
+                        <circle cx="12" cy="12" r="2" />
+                    </svg>最好成绩</span>
+            </div>
             <div class="rank-card-body">
                 <div v-if="rankCardBusy && !rankRows.length" class="loading-row"><span class="spinner"></span>加载中…</div>
                 <a v-else v-for="r in rankRows" :key="r.key" class="rank-row" :class="{ dim: !r.e }" :title="r.full"

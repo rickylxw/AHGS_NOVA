@@ -1799,9 +1799,11 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
 .rank-pill.rp3 { color: var(--bronze); background: rgba(232, 160, 108, .12); box-shadow: inset 0 0 0 1px rgba(232, 160, 108, .38); }
 .rank-pill.rpn { color: var(--accent); background: var(--row-hover); box-shadow: inset 0 0 0 1px var(--border-strong); }
 
-/* 名次卡弹窗（我的空间「🏆 名次总览」）：各赛道名次一览（与成绩海报同口径），近全宽、大字号、紧凑行距 */
+/* 名次卡弹窗（我的空间「🏆 名次总览」）：各赛道名次一览（与成绩海报同口径），宽度随内容自适应 */
 .modal.rank-card {
-  width: min(1400px, calc(100vw - 96px));
+  width: fit-content;
+  min-width: min(860px, calc(100vw - 96px));
+  max-width: calc(100vw - 96px);
   padding: 16px 20px 12px;
   max-height: min(780px, 90vh);
   display: flex;
@@ -1817,7 +1819,9 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
   font-size: 11.5px; color: var(--text-faint);
   padding: 0 12px 6px; border-bottom: 1px solid var(--border);
 }
-.rank-card-cols .num { text-align: right; }
+.rank-card-cols span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.rank-card-cols .num { justify-content: flex-end; }
+.rank-card-cols svg { flex: none; opacity: .75; }
 .rank-card-body { overflow-y: auto; display: flex; flex-direction: column; gap: 1px; margin: 0 -4px; padding: 3px 4px 0; }
 .rank-row {
   padding: 4px 12px; border-radius: 10px; line-height: 1.2;
