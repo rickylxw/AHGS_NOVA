@@ -1811,7 +1811,9 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
 }
 .rank-card-head { display: flex; align-items: center; justify-content: space-between; }
 .rank-card-head h3 { margin: 0; font-size: 19px; }
+.rank-card-user { margin-left: 10px; font-size: 13.5px; font-weight: 600; color: var(--text-dim); }
 .rank-card-meta { margin: 3px 0 10px; font-size: 12.5px; }
+.rank-card-clock { margin-left: 8px; padding-left: 10px; border-left: 1px solid var(--border); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 /* 数据列按内容收紧（max-content），仅赛道名列弹性伸缩，消除列内大片留白；
    表头置于滚动区内并用 subgrid 与各行共享列宽，保证表头与数值严格对齐 */
 .rank-card-body {

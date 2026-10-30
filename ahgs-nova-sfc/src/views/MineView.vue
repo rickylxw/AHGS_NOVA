@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { api, getToken, getStoredUser } from "../lib/api";
 import { STATUS_LABEL } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
@@ -317,9 +317,19 @@ const rankCardOpen = ref(false);
 const rankCardLoading = ref(false);
 const rankEntries = ref([]);
 
+/** 弹窗内实时时钟（秒级精度，仅在弹窗打开期间走表） */
+const nowTick = ref(new Date());
+let clockTimer = null;
+const clockText = computed(() =>
+    nowTick.value.toLocaleDateString("zh-CN") + " " +
+    nowTick.value.toLocaleTimeString("zh-CN", { hour12: false })
+);
+
 async function openRankCard() {
     rankCardOpen.value = true;
     rankCardLoading.value = true;
+    nowTick.value = new Date();
+    if (!clockTimer) clockTimer = setInterval(() => (nowTick.value = new Date()), 1000);
     try {
         rankEntries.value = (await api("/api/ranking/me")).entries ?? [];
     } catch {
@@ -332,7 +342,15 @@ async function openRankCard() {
 
 function closeRankCard() {
     rankCardOpen.value = false;
+    if (clockTimer) {
+        clearInterval(clockTimer);
+        clockTimer = null;
+    }
 }
+
+onUnmounted(() => {
+    if (clockTimer) clearInterval(clockTimer);
+});
 
 const rankCardBusy = computed(() => rankCardLoading.value || recordsLoading.value);
 
@@ -888,10 +906,11 @@ async function savePassword() {
     <div v-if="rankCardOpen" class="modal-mask" @click.self="closeRankCard">
         <div class="modal rank-card">
             <div class="rank-card-head">
-                <h3>🏆 各赛道名次</h3>
+                <h3>🏆 各赛道名次<span class="rank-card-user">{{ fullName(store.user) }}</span></h3>
                 <button class="drawer-close" aria-label="关闭" @click="closeRankCard">×</button>
             </div>
-            <div class="rank-card-meta hint">{{ rankCardMeta }}</div>
+            <div class="rank-card-meta hint">{{ rankCardMeta }}<span class="mono rank-card-clock">{{ clockText
+                }}</span></div>
             <div class="rank-card-body">
                 <div class="rank-card-cols">
                 <span title="名次">
