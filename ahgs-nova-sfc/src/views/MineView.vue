@@ -135,7 +135,8 @@ function jumpTo(key) {
 }
 
 /* ---------- 成绩海报导出（Canvas 手绘，无第三方依赖；配色跟随当前明暗主题） ---------- */
-const imgBusy = ref(false);
+const imgBusy = ref(false);      // 正在生成图片
+const imgCooldown = ref(false);  // 导出完成后的短暂冷却，防止快速连点重复导出
 
 function hexToRgba(hex, a) {
     const m = /^#([0-9a-f]{6})$/i.exec(hex || "");
@@ -184,7 +185,7 @@ function fitText(ctx, text, maxW) {
 }
 
 async function exportScoreCard() {
-    if (imgBusy.value) return;
+    if (imgBusy.value || imgCooldown.value) return;
     imgBusy.value = true;
     try {
         // 名次/榜首数据未就绪时导出的图会全是「未参加」：先等 loadRecords 完整跑完（必要时触发一次）
@@ -497,6 +498,9 @@ async function exportScoreCard() {
         toast(e.message || "导出失败", "err");
     } finally {
         imgBusy.value = false;
+        // 完成后短暂冷却，防止快速连点重复导出
+        imgCooldown.value = true;
+        setTimeout(() => (imgCooldown.value = false), 1500);
     }
 }
 
@@ -859,9 +863,9 @@ async function savePassword() {
     </div>
     <div v-else class="card">
         <h2>我的空间 <span class="tail">{{ meta }}
-                <button class="btn small" style="margin-left: 8px" :disabled="imgBusy"
+                <button class="btn small" style="margin-left: 8px" :disabled="imgBusy || imgCooldown"
                     title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
-                    imgBusy ? "⏳ 生成中…" : "📤 导出成绩图" }}</button>
+                    imgBusy ? "⏳ 导出中…" : "📤 导出成绩图" }}</button>
                 <button class="btn small" style="margin-left: 8px" title="各赛道名次一览"
                     @click="openRankCard">🏆 名次总览</button></span></h2>
         <div class="chip-row" style="margin-bottom: 14px">
@@ -1130,9 +1134,9 @@ async function savePassword() {
         <div class="modal rank-card">
             <div class="rank-card-head">
                 <h3>🏆 各赛道名次<span class="rank-card-user">{{ fullName(store.user) }}</span></h3>
-                <button class="btn small" style="margin-left: auto; margin-right: 10px" :disabled="imgBusy"
+                <button class="btn small" style="margin-left: auto; margin-right: 10px" :disabled="imgBusy || imgCooldown"
                     title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
-                    imgBusy ? "⏳ 生成中…" : "📤 导出成绩图" }}</button>
+                    imgBusy ? "⏳ 导出中…" : "📤 导出成绩图" }}</button>
                 <button class="drawer-close" aria-label="关闭" @click="closeRankCard">×</button>
             </div>
             <div class="rank-card-meta hint">{{ rankCardMeta }}<span class="mono rank-card-clock">{{ clockText
