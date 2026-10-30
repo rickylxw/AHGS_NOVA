@@ -137,6 +137,12 @@ function jumpTo(key) {
 /* ---------- 成绩海报导出（Canvas 手绘，无第三方依赖；配色跟随当前明暗主题） ---------- */
 const imgBusy = ref(false);      // 正在生成图片
 const imgCooldown = ref(false);  // 导出完成后的短暂冷却，防止快速连点重复导出
+const imgSuccess = ref(true);    // 冷却期间展示的结果提示（成功/失败）
+const exportBtnLabel = computed(() => {
+    if (imgBusy.value) return "⏳ 导出中…";
+    if (imgCooldown.value) return imgSuccess.value ? "✅ 导出成功" : "❌ 导出失败";
+    return "📤 导出成绩图";
+});
 
 function hexToRgba(hex, a) {
     const m = /^#([0-9a-f]{6})$/i.exec(hex || "");
@@ -494,11 +500,13 @@ async function exportScoreCard() {
         const name = (store.user?.display_name || store.user?.username || "me").replace(/[\\/:*?"<>| ]/g, "_");
         downloadBlob(`NOVA成绩单_${name}_${now.toISOString().slice(0, 10)}.png`, blob);
         toast("成绩图已导出", "ok");
+        imgSuccess.value = true;
     } catch (e) {
+        imgSuccess.value = false;
         toast(e.message || "导出失败", "err");
     } finally {
         imgBusy.value = false;
-        // 完成后短暂冷却，防止快速连点重复导出
+        // 完成后短暂冷却（按钮显示 ✅ 导出成功 / ❌ 导出失败），防止快速连点重复导出
         imgCooldown.value = true;
         setTimeout(() => (imgCooldown.value = false), 1500);
     }
@@ -864,8 +872,7 @@ async function savePassword() {
     <div v-else class="card">
         <h2>我的空间 <span class="tail">{{ meta }}
                 <button class="btn small" style="margin-left: 8px" :disabled="imgBusy || imgCooldown"
-                    title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
-                    imgBusy || imgCooldown ? "⏳ 导出中…" : "📤 导出成绩图" }}</button>
+                    title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{ exportBtnLabel }}</button>
                 <button class="btn small" style="margin-left: 8px" title="各赛道名次一览"
                     @click="openRankCard">🏆 名次总览</button></span></h2>
         <div class="chip-row" style="margin-bottom: 14px">
@@ -1135,8 +1142,7 @@ async function savePassword() {
             <div class="rank-card-head">
                 <h3>🏆 各赛道名次<span class="rank-card-user">{{ fullName(store.user) }}</span></h3>
                 <button class="btn small" style="margin-left: auto; margin-right: 10px" :disabled="imgBusy || imgCooldown"
-                    title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
-                    imgBusy || imgCooldown ? "⏳ 导出中…" : "📤 导出成绩图" }}</button>
+                    title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{ exportBtnLabel }}</button>
                 <button class="drawer-close" aria-label="关闭" @click="closeRankCard">×</button>
             </div>
             <div class="rank-card-meta hint">{{ rankCardMeta }}<span class="mono rank-card-clock">{{ clockText
