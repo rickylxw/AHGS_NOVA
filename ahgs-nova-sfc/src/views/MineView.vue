@@ -892,7 +892,8 @@ async function savePassword() {
                 <button class="drawer-close" aria-label="关闭" @click="closeRankCard">×</button>
             </div>
             <div class="rank-card-meta hint">{{ rankCardMeta }}</div>
-            <div class="rank-card-cols">
+            <div class="rank-card-body">
+                <div class="rank-card-cols">
                 <span title="名次">
                     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
@@ -937,8 +938,7 @@ async function savePassword() {
                         <circle cx="12" cy="12" r="6" />
                         <circle cx="12" cy="12" r="2" />
                     </svg>最好成绩</span>
-            </div>
-            <div class="rank-card-body">
+                </div>
                 <div v-if="rankCardBusy && !rankRows.length" class="loading-row"><span class="spinner"></span>加载中…</div>
                 <a v-else v-for="r in rankRows" :key="r.key" class="rank-row" :class="{ dim: !r.e }" :title="r.full"
                     :href="'#/leaderboard?problem=' + r.key" @click="closeRankCard">

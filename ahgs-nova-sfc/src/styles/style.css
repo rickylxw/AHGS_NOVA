@@ -1802,7 +1802,7 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
 /* 名次卡弹窗（我的空间「🏆 名次总览」）：各赛道名次一览（与成绩海报同口径），宽度随内容自适应 */
 .modal.rank-card {
   width: fit-content;
-  min-width: min(860px, calc(100vw - 96px));
+  min-width: min(780px, calc(100vw - 96px));
   max-width: calc(100vw - 96px);
   padding: 16px 20px 12px;
   max-height: min(780px, 90vh);
@@ -1812,25 +1812,33 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
 .rank-card-head { display: flex; align-items: center; justify-content: space-between; }
 .rank-card-head h3 { margin: 0; font-size: 19px; }
 .rank-card-meta { margin: 3px 0 10px; font-size: 12.5px; }
-.rank-card-cols, .rank-row {
-  display: grid; grid-template-columns: 96px 2fr 1fr 0.8fr 0.5fr 0.85fr 0.95fr; gap: 10px; align-items: center;
+/* 数据列按内容收紧（max-content），仅赛道名列弹性伸缩，消除列内大片留白；
+   表头置于滚动区内并用 subgrid 与各行共享列宽，保证表头与数值严格对齐 */
+.rank-card-body {
+  overflow-y: auto;
+  display: grid; grid-template-columns: 88px minmax(240px, 1fr) repeat(5, max-content); gap: 0 14px; align-items: center;
+  padding: 0;
 }
+.rank-card-body .loading-row { grid-column: 1 / -1; }
 .rank-card-cols {
+  position: sticky; top: 0; z-index: 1;
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid;
   font-size: 11.5px; color: var(--text-faint);
-  padding: 0 12px 6px; border-bottom: 1px solid var(--border);
+  padding: 4px 0 6px; background: var(--card);
+  border-bottom: 1px solid var(--border);
 }
 .rank-card-cols span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .rank-card-cols .num { justify-content: flex-end; }
 .rank-card-cols svg { flex: none; opacity: .75; }
-.rank-card-body { overflow-y: auto; display: flex; flex-direction: column; gap: 1px; margin: 0 -4px; padding: 3px 4px 0; }
 .rank-row {
-  padding: 4px 12px; border-radius: 10px; line-height: 1.2;
+  grid-column: 1 / -1; display: grid; grid-template-columns: subgrid;
+  padding: 4px 0; border-radius: 8px; line-height: 1.2;
   text-decoration: none; color: inherit; border: 1px solid transparent;
 }
 .rank-row:hover { background: var(--row-hover); border-color: var(--border); }
 .rank-row.dim { opacity: .5; }
 .rank-cell { display: flex; }
-.rank-cell .rank-pill { min-width: 68px; justify-content: center; font-size: 13px; }
+.rank-cell .rank-pill { min-width: 64px; justify-content: center; font-size: 13px; }
 .rank-name { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .rank-problem { flex: none; font-weight: 700; font-size: 16px; white-space: nowrap; }
 .rank-sub {
@@ -1850,8 +1858,8 @@ details.tier.tier-dim .tier-count { background: var(--border-strong); color: var
 .rank-card-foot { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border); font-size: 12px; }
 /* 窄屏收起次要列，退化为四列 */
 @media (max-width: 1100px) {
-  .modal.rank-card { width: min(720px, calc(100vw - 48px)); }
-  .rank-card-cols, .rank-row { grid-template-columns: 92px minmax(200px, 1fr) 150px 132px; }
+  .modal.rank-card { width: min(680px, calc(100vw - 48px)); min-width: 0; }
+  .rank-card-body { grid-template-columns: 88px minmax(200px, 1fr) max-content max-content; }
   .rank-tok, .rank-cnt, .rank-last, .rank-card-cols .col-tok, .rank-card-cols .col-cnt, .rank-card-cols .col-last { display: none; }
 }
 
