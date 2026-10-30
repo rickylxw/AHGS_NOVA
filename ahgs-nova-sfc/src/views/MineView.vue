@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { api, getToken, getStoredUser } from "../lib/api";
-import { STATUS_LABEL } from "../lib/constants";
+import { FW_LABEL, STATUS_LABEL } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
 import { navToCurve } from "../lib/router";
 import { downloadBlob, fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, isAscend, fullNum } from "../lib/format";
@@ -133,15 +133,53 @@ function jumpTo(key) {
     });
 }
 
-/* ---------- 成绩海报导出（Canvas 手绘，无第三方依赖） ---------- */
+/* ---------- 成绩海报导出（Canvas 手绘，无第三方依赖；配色跟随当前明暗主题） ---------- */
 const imgBusy = ref(false);
 
-function cardRankColor(rank) {
-    if (rank === 1) return "#fbbf24";
-    if (rank === 2) return "#c7d5f0";
-    if (rank === 3) return "#e8a06c";
-    if (rank != null) return "#22d3ee";
-    return "#5e6c92";
+function hexToRgba(hex, a) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex || "");
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
+    else ctx.rect(x, y, w, h);
+}
+
+/* 24 单位线性小图标（与顶栏/名次卡列头同款风格），Path2D 直接复用 SVG 路径 */
+const COL_ICONS = {
+    rank: ["M15.477 12.89 17 22l-5-3-5 3 1.523-9.11", "M12 2a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"],
+    track: ["M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z", "M4 22v-7"],
+    gap: ["M22 7l-8.5 8.5-5-5L2 17", "M16 7h6v6"],
+    tok: ["M3 5v14a9 3 0 0 0 18 0V5", "M3 5a9 3 0 0 0 18 0", "M3 12a9 3 0 0 0 18 0"],
+    send: ["M22 2 15 22l-4-9-9-4Z", "M22 2 11 13"],
+    clock: ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z", "M12 6v6l4 2"],
+    target: ["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z", "M12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z", "M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"],
+};
+
+function drawIcon(ctx, key, x, y, size, color) {
+    const paths = COL_ICONS[key];
+    if (!paths) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(size / 24, size / 24);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const d of paths) ctx.stroke(new Path2D(d));
+    ctx.restore();
+}
+
+/** 按像素宽截断文本（超出补「…」），需先设置好 ctx.font */
+function fitText(ctx, text, maxW) {
+    if (ctx.measureText(text).width <= maxW) return text;
+    let t = text;
+    while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+    return t + "…";
 }
 
 async function exportScoreCard() {
@@ -152,10 +190,94 @@ async function exportScoreCard() {
             if (a.participated !== b.participated) return a.participated ? -1 : 1;
             return (a.rank ?? 999) - (b.rank ?? 999);
         });
-        const W = 900, PAD = 40, ROW_H = 46, headH = 152, footH = 58;
-        const top3 = cards.filter(c => c.rank != null && c.rank <= 3).length;
-        const totalSubs = cards.reduce((a, c) => a + c.count, 0);
-        const H = headH + cards.length * ROW_H + footH;
+        const now = new Date();
+
+        // 主题配色：直接读取页面 CSS 变量，导出图与当前明暗主题一致
+        const cs = getComputedStyle(document.documentElement);
+        const v = n => cs.getPropertyValue(n).trim();
+        const P = {
+            text: v("--text") || "#e8eeff",
+            dim: v("--text-dim") || "#93a1c4",
+            faint: v("--text-faint") || "#5e6c92",
+            accent: v("--accent") || "#22d3ee",
+            good: v("--good") || "#34d399",
+            bad: v("--bad") || "#fb7185",
+            gold: v("--gold") || "#fbbf24",
+            silver: v("--silver") || "#c7d5f0",
+            bronze: v("--bronze") || "#e8a06c",
+            border: v("--border-strong") || "rgba(148,178,255,.30)",
+            card: v("--card") || "#0e1730",
+            bgTop: v("--bg") || "#070b17",
+            bgBottom: v("--bg-soft") || v("--bg") || "#101a36",
+        };
+        const dark = (document.documentElement.getAttribute("data-theme") || store.theme || "dark") !== "light";
+        const glowColor = dark ? "rgba(34,211,238,.16)" : "rgba(8,145,178,.10)";
+        // 名次徽章底色（与名次卡 rank-pill 同款）
+        const pillBg = {
+            1: "rgba(251,191,36,.16)", 2: "rgba(199,213,240,.14)", 3: "rgba(232,160,108,.14)",
+            def: dark ? "rgba(34,211,238,.09)" : "rgba(8,145,178,.08)",
+        };
+        // 框架徽章配色（与 FwBadge 同款；浅色主题下换深色文字保证对比度）
+        const fwTheme = dark
+            ? { custom: ["#6ee7b7", "rgba(52,211,153,.14)"], ahg: ["#c4b5fd", "rgba(167,139,250,.14)"] }
+            : { custom: ["#059669", "rgba(5,150,105,.12)"], ahg: ["#7c3aed", "rgba(124,58,237,.10)"] };
+
+        const sans = '"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif';
+        const mono = '"JetBrains Mono",Consolas,monospace';
+        // 弹窗同款字号
+        const F = {
+            title: `700 19px ${sans}`, user: `600 13.5px ${sans}`,
+            meta: `500 12.5px ${sans}`, clock: `500 12.5px ${mono}`,
+            head: `600 11.5px ${sans}`,
+            name: `600 16px ${sans}`, sub: `500 12.5px ${sans}`, model: `400 12.5px ${mono}`,
+            pill: `700 13px ${sans}`, gap: `500 13.5px ${sans}`, num: `500 13.5px ${mono}`,
+            last: `400 13.5px ${mono}`, score: `600 15px ${mono}`, badge: `600 10.5px ${sans}`,
+            foot: `400 12px ${sans}`,
+        };
+
+        // 行数据与列宽都按内容测量（与名次卡弹窗一致的自适应宽度）
+        const rows = cards.map(c => {
+            const legacy = c.ranking_legacy === true;
+            const scoreTxt = c.failed || c.best == null ? "—" : fmtObj(c.best);
+            return {
+                c,
+                dim: !c.participated,
+                legacy,
+                rankText: c.failed ? "🚫 未过" : (c.participated && c.rank != null ? `第 ${c.rank} 名` : "未参加"),
+                name: c.name,
+                fw: c.fw ? (FW_LABEL[c.fw] || "AHG") : "",
+                model: c.model || "",
+                gap: c.top1Me ? "已是榜首" : (c.top1GapText || "").replace(/[（）]/g, ""),
+                tok: c.tokens ? fmtTokens(c.tokens) : "—",
+                cnt: c.count ? String(c.count) : "—",
+                last: c.lastAt ? fmtTime(c.lastAt) : "—",
+                score: scoreTxt,
+            };
+        });
+
+        const mc = document.createElement("canvas").getContext("2d");
+        const mw = (text, font) => { mc.font = font; return mc.measureText(text).width; };
+        const CONT_GAP = 14;
+        const pillW = Math.max(...rows.map(r => mw(r.rankText, F.pill)), mw("第 99 名", F.pill)) + 26;
+        const nameNat = Math.max(220, ...rows.map(r =>
+            mw(r.name, F.name) + (r.fw ? 12 + mw(r.fw, F.sub) + 18 : 0) + (r.model ? 10 + mw(r.model, F.model) : 0)));
+        const gapW = Math.max(...rows.map(r => mw(r.gap || "—", F.gap)), 70) + 8;
+        const tokW = Math.max(...rows.map(r => mw(r.tok, F.num)), 56) + 8;
+        const cntW = Math.max(...rows.map(r => mw(r.cnt, F.num)), 30) + 8;
+        const lastW = Math.max(...rows.map(r => mw(r.last, F.last)), 90) + 14;
+        const scoreW = Math.max(...rows.map(r =>
+            mw(r.score, F.score) + (r.legacy ? 6 + mw("旧评估", F.badge) + 14 : 0)), 60) + 8;
+        const CARD_PAD_X = 20;
+        const contentW = 88 + nameNat + gapW + tokW + cntW + lastW + scoreW + CONT_GAP * 6;
+        const cardW = Math.round(Math.min(1720, Math.max(760, contentW + CARD_PAD_X * 2)));
+        const nameW = cardW - CARD_PAD_X * 2 - 88 - (gapW + tokW + cntW + lastW + scoreW) - CONT_GAP * 6;
+        const ROW_H = 32;
+        const cardH = Math.round(
+            16 /*上内边距*/ + 26 /*标题*/ + 8 + 18 /*摘要*/ + 10 + 27 /*列头*/ +
+            rows.length * ROW_H + 8 + 1 + 22 /*页脚*/ + 12 /*下内边距*/);
+        const M = 28; // 卡片四周留一点遮罩底色，呈现弹窗悬浮观感
+        const W = cardW + M * 2;
+        const H = cardH + M * 2;
         const dpr = 2; // 固定 2 倍超采样，导出图清晰
         const cv = document.createElement("canvas");
         cv.width = W * dpr;
@@ -163,109 +285,192 @@ async function exportScoreCard() {
         const ctx = cv.getContext("2d");
         ctx.scale(dpr, dpr);
 
-        // 背景：深色渐变 + 顶部青色光晕
-        const bg = ctx.createLinearGradient(0, 0, 0, H);
-        bg.addColorStop(0, "#070b17");
-        bg.addColorStop(1, "#101a36");
-        ctx.fillStyle = bg;
+        // 背景：弹窗遮罩（页面底色 + 轻微压暗），卡片居中悬浮
+        ctx.fillStyle = P.bgTop;
         ctx.fillRect(0, 0, W, H);
-        const glow = ctx.createRadialGradient(W / 2, -80, 30, W / 2, -80, 460);
-        glow.addColorStop(0, "rgba(34,211,238,.16)");
-        glow.addColorStop(1, "rgba(34,211,238,0)");
-        ctx.fillStyle = glow;
-        ctx.fillRect(0, 0, W, 320);
+        ctx.fillStyle = dark ? "rgba(3,7,18,.35)" : "rgba(31,51,110,.08)";
+        ctx.fillRect(0, 0, W, H);
+        const cardX = M, cardY = M;
+        ctx.save();
+        ctx.shadowColor = dark ? "rgba(0,0,0,.5)" : "rgba(38,56,118,.20)";
+        ctx.shadowBlur = 40;
+        ctx.shadowOffsetY = 12;
+        rr(ctx, cardX, cardY, cardW, cardH, 16);
+        ctx.fillStyle = P.card;
+        ctx.fill();
+        ctx.restore();
+        rr(ctx, cardX, cardY, cardW, cardH, 16);
+        ctx.strokeStyle = P.border;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.textBaseline = "middle"; // 卡片内所有文字按行高中线定位（与 CSS 垂直居中一致）
 
-        const sans = '"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif';
-        const mono = '"JetBrains Mono",Consolas,monospace';
-        ctx.textBaseline = "alphabetic";
+        // 列位置：名次/赛道左对齐，其余按内容宽从右往左排（右对齐）
+        const cx0 = cardX + CARD_PAD_X;
+        const nameX = cx0 + 88;
+        const scoreR = cardX + cardW - CARD_PAD_X, lastR = scoreR - scoreW - CONT_GAP;
+        const cntR = lastR - lastW - CONT_GAP, tokR = cntR - cntW - CONT_GAP;
+        const gapR = tokR - tokW - CONT_GAP;
 
-        // 标题
-        ctx.font = `700 30px ${sans}`;
-        ctx.fillStyle = "#e8eeff";
-        const brand = "AHGS NOVA";
-        ctx.fillText(brand, PAD, 62);
-        ctx.fillStyle = "#22d3ee";
-        ctx.fillText(" · 个人成绩单", PAD + ctx.measureText(brand).width, 62);
+        // 头部：🏆 各赛道名次 + 昵称（与名次卡弹窗头部同款）
+        const headCY = cardY + 16 + 13;
+        ctx.font = F.title;
+        ctx.fillStyle = P.text;
+        ctx.fillText("🏆", cx0, headCY);
+        const trophyW = mw("🏆", F.title);
+        ctx.fillText("各赛道名次", cx0 + trophyW + 8, headCY);
+        ctx.font = F.user;
+        ctx.fillStyle = P.dim;
+        ctx.fillText(fullName(store.user), cx0 + trophyW + 8 + mw("各赛道名次", F.title) + 12, headCY);
 
-        // 用户与汇总
-        ctx.font = `500 17px ${sans}`;
-        ctx.fillStyle = "#93a1c4";
-        ctx.fillText(`${fullName(store.user)} 的各赛道成绩 · ${new Date().toLocaleDateString("zh-CN")}`, PAD, 92);
-        ctx.font = `600 15px ${sans}`;
-        ctx.fillStyle = "#a78bfa";
-        ctx.fillText(
-            `参与 ${participatedCount.value}/${cards.length} 赛道 · 前三 ${top3} 项 · 累计提交 ${totalSubs} 条`,
-            PAD, 120
-        );
-
-        // 表头线
-        ctx.strokeStyle = "rgba(148,178,255,.25)";
+        // 摘要行 + 实时时钟（秒级）
+        const metaCY = headCY + 13 + 8 + 9;
+        const top3 = cards.filter(c => c.rank != null && c.rank <= 3).length;
+        const totalSubs = cards.reduce((a, c) => a + c.count, 0);
+        ctx.font = F.meta;
+        ctx.fillStyle = P.dim;
+        const metaText = `参与 ${participatedCount.value}/${cards.length} 赛道 · 前三 ${top3} · 累计提交 ${totalSubs} 条`;
+        ctx.fillText(metaText, cx0, metaCY);
+        const clockText = `${now.toLocaleDateString("zh-CN")} ${now.toLocaleTimeString("zh-CN", { hour12: false })}`;
+        const metaW = mw(metaText, F.meta);
+        const clockW = mw(clockText, F.clock);
+        ctx.strokeStyle = P.border;
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(PAD, headH - 20);
-        ctx.lineTo(W - PAD, headH - 20);
+        ctx.moveTo(cx0 + metaW + 10, metaCY - 8);
+        ctx.lineTo(cx0 + metaW + 10, metaCY + 8);
+        ctx.stroke();
+        ctx.font = F.clock;
+        ctx.fillStyle = P.dim;
+        ctx.fillText(clockText, cx0 + metaW + 20, metaCY);
+
+        // 列头（带小图标，底部描边）
+        const colHeadCY = metaCY + 9 + 10 + 13;
+        ctx.font = F.head;
+        ctx.fillStyle = P.faint;
+        drawIcon(ctx, "rank", cx0, colHeadCY - 6.5, 13, P.faint);
+        ctx.fillText("名次", cx0 + 18, colHeadCY);
+        drawIcon(ctx, "track", nameX, colHeadCY - 6.5, 13, P.faint);
+        ctx.fillText("赛道", nameX + 18, colHeadCY);
+        const headCell = (label, icon, R) => {
+            const lw = mw(label, F.head);
+            drawIcon(ctx, icon, R - lw - 4 - 13, colHeadCY - 6.5, 13, P.faint);
+            ctx.fillText(label, R - lw, colHeadCY);
+        };
+        headCell("与榜首", "gap", gapR);
+        headCell("Σtoken", "tok", tokR);
+        headCell("提交", "send", cntR);
+        headCell("最近提交", "clock", lastR);
+        headCell("最好成绩", "target", scoreR);
+        ctx.strokeStyle = P.border;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx0, colHeadCY + 13);
+        ctx.lineTo(cardX + cardW - CARD_PAD_X, colHeadCY + 13);
         ctx.stroke();
 
         // 各赛道行（已参与按名次在前，未参与置底置灰）
-        ctx.font = `600 17px ${sans}`;
-        ctx.fillStyle = "#5e6c92";
-        const col = { rank: 210, best: 330, gap: 520, tok: 700, cnt: 812 };
-        ctx.fillText("名次", col.rank, headH - 2);
-        ctx.fillText("适应度", col.best, headH - 2);
-        ctx.fillText("与榜首", col.gap, headH - 2);
-        ctx.fillText("token", col.tok, headH - 2);
-        ctx.fillText("提交", col.cnt, headH - 2);
+        const rowsTop = colHeadCY + 13;
+        let y = rowsTop;
+        for (const r of rows) {
+            const c = r.c, dim = r.dim;
+            const rowCY = y + ROW_H / 2;
 
-        let y = headH + 30;
-        for (const c of cards) {
-            const dim = !c.participated;
-            ctx.font = `600 17px ${sans}`;
-            ctx.fillStyle = dim ? "#5e6c92" : "#e8eeff";
-            ctx.fillText(c.name, PAD, y);
-
+            // 名次（圆角徽章，与名次卡 rank-pill 同款；未过为红色文字，未参加为灰徽章）
+            ctx.font = F.pill;
             if (c.failed) {
-                ctx.font = `600 15px ${sans}`;
-                ctx.fillStyle = "#fb7185";
-                ctx.fillText("🚫 holdout 未过", col.rank, y);
+                ctx.fillStyle = P.bad;
+                ctx.fillText(r.rankText, cx0, rowCY);
             } else if (dim) {
-                ctx.font = `500 15px ${sans}`;
-                ctx.fillStyle = "#5e6c92";
-                ctx.fillText("未参与", col.rank, y);
+                rr(ctx, cx0, rowCY - 12, 64, 24, 12);
+                ctx.fillStyle = dark ? "rgba(34,211,238,.07)" : "rgba(8,145,178,.07)";
+                ctx.fill();
+                ctx.fillStyle = P.faint;
+                ctx.fillText(r.rankText, cx0 + (64 - mw(r.rankText, F.pill)) / 2, rowCY);
             } else {
-                ctx.font = `700 17px ${sans}`;
-                ctx.fillStyle = cardRankColor(c.rank);
-                ctx.fillText(`第 ${c.rank} 名`, col.rank, y);
+                const rc = c.rank === 1 ? P.gold : c.rank === 2 ? P.silver : c.rank === 3 ? P.bronze : P.accent;
+                rr(ctx, cx0, rowCY - 12, pillW, 24, 12);
+                ctx.fillStyle = pillBg[c.rank] || pillBg.def;
+                ctx.fill();
+                ctx.strokeStyle = hexToRgba(rc.startsWith("#") ? rc : "#94b2ff", .4);
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = rc;
+                ctx.fillText(r.rankText, cx0 + (pillW - mw(r.rankText, F.pill)) / 2, rowCY);
             }
 
-            ctx.font = `500 16px ${mono}`;
-            ctx.fillStyle = dim ? "#5e6c92" : "#e8eeff";
-            ctx.fillText(c.best != null && !c.failed ? fmtObj(c.best) : "—", col.best, y);
-
-            const gap = (c.top1GapText || "").replace(/[（）]/g, "");
-            ctx.font = `500 15px ${sans}`;
-            if (gap) {
-                ctx.fillStyle = c.top1Me ? "#34d399" : "#93a1c4";
-                ctx.fillText(c.top1Me ? "已是榜首" : gap, col.gap, y);
-            } else if (!dim && c.top1) {
-                ctx.fillStyle = "#5e6c92";
-                ctx.fillText("—", col.gap, y);
+            // 赛道名 + 框架徽章 + 模型（无框架信息的未参与行只画名字）
+            ctx.font = F.name;
+            ctx.fillStyle = dim ? P.faint : P.text;
+            ctx.fillText(r.name, nameX, rowCY);
+            let bx = nameX + mw(r.name, F.name) + 12;
+            if (r.fw) {
+                const [fwT, fwB] = fwTheme[c.fw === "custom" ? "custom" : "ahg"];
+                const fwW = mw(r.fw, F.sub) + 16;
+                rr(ctx, bx, rowCY - 9, fwW, 18, 9);
+                ctx.fillStyle = fwB;
+                ctx.fill();
+                ctx.font = F.sub;
+                ctx.fillStyle = dim ? P.faint : fwT;
+                ctx.fillText(r.fw, bx + 8, rowCY);
+                if (r.model) {
+                    ctx.font = F.model;
+                    ctx.fillStyle = dim ? P.faint : P.dim;
+                    ctx.fillText(fitText(ctx, r.model, Math.max(40, nameX + nameW - (bx + fwW + 10))), bx + fwW + 10, rowCY);
+                }
             }
 
-            ctx.font = `400 15px ${mono}`;
-            ctx.fillStyle = dim ? "#5e6c92" : "#93a1c4";
-            ctx.fillText(c.tokens ? fmtTokens(c.tokens) : "—", col.tok, y);
-            ctx.fillText(c.count ? String(c.count) : "—", col.cnt, y);
+            // 与榜首
+            ctx.font = F.gap;
+            ctx.fillStyle = dim ? P.faint : (c.top1Me ? P.good : P.dim);
+            ctx.fillText(r.gap || "—", gapR - mw(r.gap || "—", F.gap), rowCY);
+
+            // 数值列（右对齐）
+            ctx.font = F.num;
+            ctx.fillStyle = dim ? P.faint : P.text;
+            ctx.fillText(r.tok, tokR - mw(r.tok, F.num), rowCY);
+            ctx.fillText(r.cnt, cntR - mw(r.cnt, F.num), rowCY);
+            ctx.font = F.last;
+            ctx.fillStyle = dim ? P.faint : P.dim;
+            ctx.fillText(r.last, lastR - mw(r.last, F.last), rowCY);
+
+            // 最好成绩（旧评估附小徽章）
+            ctx.font = F.score;
+            ctx.fillStyle = dim ? P.faint : P.text;
+            if (r.legacy && !dim && !c.failed) {
+                const badgeW = mw("旧评估", F.badge) + 14;
+                rr(ctx, scoreR - badgeW, rowCY - 8, badgeW, 16, 8);
+                ctx.fillStyle = dark ? "rgba(148,178,255,.10)" : "rgba(31,51,110,.07)";
+                ctx.fill();
+                ctx.font = F.badge;
+                ctx.fillStyle = P.dim;
+                ctx.fillText("旧评估", scoreR - badgeW + 7, rowCY);
+                ctx.font = F.score;
+                ctx.fillStyle = dim ? P.faint : P.text;
+                ctx.fillText(r.score, scoreR - badgeW - 6 - mw(r.score, F.score), rowCY);
+            } else {
+                ctx.fillText(r.score, scoreR - mw(r.score, F.score), rowCY);
+            }
 
             y += ROW_H;
         }
 
-        // 页脚
-        ctx.font = `400 13px ${sans}`;
-        ctx.fillStyle = "#5e6c92";
-        const now = new Date();
-        const ts = `${now.toLocaleDateString("zh-CN")} ${now.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`;
-        ctx.fillText("AHGS NOVA · Vue SFC 生成", PAD, H - 24);
-        ctx.fillText(ts, W - PAD - ctx.measureText(ts).width, H - 24);
+        // 页脚（与弹窗页脚提示同款 + 生成署名）
+        const footDivider = y + 8;
+        ctx.strokeStyle = P.border;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx0, footDivider);
+        ctx.lineTo(cardX + cardW - CARD_PAD_X, footDivider);
+        ctx.stroke();
+        const footCY = footDivider + 15;
+        ctx.font = F.foot;
+        ctx.fillStyle = P.faint;
+        ctx.fillText("成绩为当前排名用分（ranking_score），越小越好 · 悬停数值可查看完整精度", cx0, footCY);
+        const ts = `${now.toLocaleDateString("zh-CN")} ${now.toLocaleTimeString("zh-CN", { hour12: false })} 生成`;
+        const brand = "AHGS NOVA · Vue SFC 生成";
+        ctx.fillText(ts, cardX + cardW - CARD_PAD_X - mw(brand, F.foot) - 12 - mw(ts, F.foot), footCY);
+        ctx.fillText(brand, cardX + cardW - CARD_PAD_X - mw(brand, F.foot), footCY);
 
         const blob = await new Promise(res => cv.toBlob(res, "image/png"));
         if (!blob) throw new Error("画布导出失败");
