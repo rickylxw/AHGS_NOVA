@@ -865,7 +865,7 @@ async function savePassword() {
         <h2>我的空间 <span class="tail">{{ meta }}
                 <button class="btn small" style="margin-left: 8px" :disabled="imgBusy || imgCooldown"
                     title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
-                    imgBusy ? "⏳ 导出中…" : "📤 导出成绩图" }}</button>
+                    imgBusy || imgCooldown ? "⏳ 导出中…" : "📤 导出成绩图" }}</button>
                 <button class="btn small" style="margin-left: 8px" title="各赛道名次一览"
                     @click="openRankCard">🏆 名次总览</button></span></h2>
         <div class="chip-row" style="margin-bottom: 14px">
@@ -1136,7 +1136,7 @@ async function savePassword() {
                 <h3>🏆 各赛道名次<span class="rank-card-user">{{ fullName(store.user) }}</span></h3>
                 <button class="btn small" style="margin-left: auto; margin-right: 10px" :disabled="imgBusy || imgCooldown"
                     title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
-                    imgBusy ? "⏳ 导出中…" : "📤 导出成绩图" }}</button>
+                    imgBusy || imgCooldown ? "⏳ 导出中…" : "📤 导出成绩图" }}</button>
                 <button class="drawer-close" aria-label="关闭" @click="closeRankCard">×</button>
             </div>
             <div class="rank-card-meta hint">{{ rankCardMeta }}<span class="mono rank-card-clock">{{ clockText
