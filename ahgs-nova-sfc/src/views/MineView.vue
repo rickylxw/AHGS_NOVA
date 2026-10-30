@@ -1112,6 +1112,9 @@ async function savePassword() {
         <div class="modal rank-card">
             <div class="rank-card-head">
                 <h3>🏆 各赛道名次<span class="rank-card-user">{{ fullName(store.user) }}</span></h3>
+                <button class="btn small" style="margin-left: auto; margin-right: 10px" :disabled="imgBusy"
+                    title="把各赛道名次与成绩导出为一张图片" @click="exportScoreCard">{{
+                    imgBusy ? "⏳ 生成中…" : "📤 导出成绩图" }}</button>
                 <button class="drawer-close" aria-label="关闭" @click="closeRankCard">×</button>
             </div>
             <div class="rank-card-meta hint">{{ rankCardMeta }}<span class="mono rank-card-clock">{{ clockText
