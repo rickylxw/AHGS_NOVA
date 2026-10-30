@@ -186,10 +186,20 @@ async function exportScoreCard() {
     if (imgBusy.value) return;
     imgBusy.value = true;
     try {
+        // 页面刚打开 / 未进过「名次与提交」页签时数据尚未加载：先等数据就绪再绘制，避免导出空图
+        if (!trackCards.value.length) {
+            if (!recordsLoading.value) loadRecords();
+            await new Promise(resolve => {
+                const stop = watch(() => recordsLoading.value, loading => {
+                    if (!loading) { stop(); resolve(); }
+                }, { immediate: true });
+            });
+        }
         const cards = [...trackCards.value].sort((a, b) => {
             if (a.participated !== b.participated) return a.participated ? -1 : 1;
             return (a.rank ?? 999) - (b.rank ?? 999);
         });
+        if (!cards.length) throw new Error("暂无可导出的成绩数据，请稍后重试");
         const now = new Date();
 
         // 主题配色：直接读取页面 CSS 变量，导出图与当前明暗主题一致
