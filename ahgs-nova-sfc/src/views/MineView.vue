@@ -312,6 +312,88 @@ const visibleRuns = computed(() =>
     runsExpanded.value || runs.value.length <= LIST_PREVIEW ? runs.value : runs.value.slice(0, LIST_PREVIEW)
 );
 
+/* ---------- 名次卡弹窗：各赛道名次一览（与成绩海报同口径） ---------- */
+const rankCardOpen = ref(false);
+const rankCardLoading = ref(false);
+const rankEntries = ref([]);
+
+async function openRankCard() {
+    rankCardOpen.value = true;
+    rankCardLoading.value = true;
+    try {
+        rankEntries.value = (await api("/api/ranking/me")).entries ?? [];
+    } catch {
+        rankEntries.value = [];
+    }
+    rankCardLoading.value = false;
+    // 与榜差距等汇总需要 records 数据（trackCards）；未加载过则补一次
+    if (!ranks.value.length && !recordsLoading.value) loadRecords();
+}
+
+function closeRankCard() {
+    rankCardOpen.value = false;
+}
+
+const rankCardBusy = computed(() => rankCardLoading.value || recordsLoading.value);
+
+/** 内建赛道在前、自定义赛道补后；已参与按名次升序在前，未参加沉底（同海报排序） */
+const rankRows = computed(() => {
+    const cardByKey = new Map(trackCards.value.map(c => [c.key, c]));
+    const byKey = new Map(rankEntries.value.map(e => [e.problem_key, e]));
+    const shortName = n => (n || "").split("(")[0].trim() || n;
+    const rows = [];
+    for (const p of store.problems) {
+        rows.push({ key: p.key, name: shortName(p.name), full: p.name, e: byKey.get(p.key) ?? null, card: cardByKey.get(p.key) ?? null });
+        byKey.delete(p.key);
+    }
+    for (const e of byKey.values())
+        rows.push({
+            key: e.problem_key,
+            name: shortName(e.problem_name || e.problem_key),
+            full: e.problem_name || e.problem_key,
+            e,
+            card: cardByKey.get(e.problem_key) ?? null,
+        });
+    return rows.sort((a, b) => {
+        const pa = a.e ? 0 : 1, pb = b.e ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        if (!pa) return (a.e.rank ?? 9e3) - (b.e.rank ?? 9e3);
+        return 0;
+    });
+});
+
+const rankCardMeta = computed(() => {
+    const cards = rankRows.value.map(r => r.card).filter(Boolean);
+    const top3 = cards.filter(c => c.rank != null && c.rank <= 3).length;
+    const totalSubs = cards.reduce((a, c) => a + c.count, 0);
+    return `参与 ${participatedCount.value}/${rankRows.value.length} 赛道 · 前三 ${top3} · 累计提交 ${totalSubs} 条`;
+});
+
+/** 名次卡展示分：当前排名用分（ranking_score）；为 null 即 holdout 未过 */
+function cardScore(e) {
+    if (!e) return null;
+    const s = Number(e.ranking_score);
+    return e.ranking_score != null && isFinite(s) ? s : null;
+}
+
+/** 与榜首差距文本（同海报口径：去括号；本人榜首显示「已是榜首」） */
+function cardGap(row) {
+    const c = row.card;
+    if (!c || !c.participated) return "";
+    if (c.top1Me) return "已是榜首";
+    return (c.top1GapText || "").replace(/[（）]/g, "");
+}
+
+function scoreTitle(e) {
+    if (!e) return "";
+    const parts = [];
+    if (e.ranking_score != null) parts.push("完整值：" + fullNum(e.ranking_score));
+    if (e.train_objective != null) parts.push("新训练集成绩：" + fullNum(e.train_objective));
+    if (e.best_objective != null) parts.push("原始最优：" + fullNum(e.best_objective));
+    if (e.best_submitted_at) parts.push("提交于 " + e.best_submitted_at);
+    return parts.join("；");
+}
+
 function probName(key) {
     return (store.problems.find(p => p.key === key) || {}).name || key;
 }
@@ -535,7 +617,9 @@ async function savePassword() {
         </div>
     </div>
     <div v-else class="card">
-        <h2>我的空间 <span class="tail">{{ meta }}</span></h2>
+        <h2>我的空间 <span class="tail">{{ meta }}
+                <button class="btn small" style="margin-left: 8px" title="各赛道名次一览"
+                    @click="openRankCard">🏆 名次总览</button></span></h2>
         <div class="chip-row" style="margin-bottom: 14px">
             <button class="chip" :class="{ on: tab === 'records' }" @click="tab = 'records'">名次与提交</button>
             <button class="chip" :class="{ on: tab === 'instances' }" @click="tab = 'instances'">进化记录与实例</button>
@@ -797,6 +881,47 @@ async function savePassword() {
                     <button class="btn primary" :disabled="pwBusy" @click="savePassword">修改密码</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- 名次卡弹窗 -->
+    <div v-if="rankCardOpen" class="modal-mask" @click.self="closeRankCard">
+        <div class="modal rank-card">
+            <div class="rank-card-head">
+                <h3>🏆 各赛道名次</h3>
+                <button class="drawer-close" aria-label="关闭" @click="closeRankCard">×</button>
+            </div>
+            <div class="rank-card-meta hint">{{ rankCardMeta }}</div>
+            <div class="rank-card-cols mono"><span>名次</span><span>赛道</span><span>与榜首</span><span
+                    class="num col-tok">Σtoken</span><span class="num col-cnt">提交</span><span
+                    class="num col-last">最近提交</span><span class="num">最好成绩</span></div>
+            <div class="rank-card-body">
+                <div v-if="rankCardBusy && !rankRows.length" class="loading-row"><span class="spinner"></span>加载中…</div>
+                <a v-else v-for="r in rankRows" :key="r.key" class="rank-row" :class="{ dim: !r.e }" :title="r.full"
+                    :href="'#/leaderboard?problem=' + r.key" @click="closeRankCard">
+                    <span class="rank-cell"><span v-if="r.e && r.e.rank" class="rank-pill"
+                            :class="rankCls(r.e.rank)">第{{ r.e.rank }}名</span><span v-else
+                            class="rank-pill rpn">未参加</span></span>
+                    <span class="rank-name"><span class="rank-problem">{{ r.name }}</span><span v-if="r.e"
+                            class="rank-sub"><FwBadge :ft="r.e.framework_type" /><span class="mono">{{ r.e.llm_model
+                                || "—" }}</span></span><span v-else class="rank-sub hint">尚无提交记录</span></span>
+                    <span class="rank-gap"><template v-if="r.e && r.e.rank"><template v-if="cardGap(r)"><span
+                                    :class="{ me: r.card && r.card.top1Me }">{{ cardGap(r) }}</span></template><template
+                                v-else><span class="hint">—</span></template></template><template v-else><span
+                                class="hint">—</span></template></span>
+                    <span class="rank-tok mono">{{ r.card && r.card.tokens ? fmtTokens(r.card.tokens) : "—" }}</span>
+                    <span class="rank-cnt mono">{{ r.card && r.card.count ? r.card.count : "—" }}</span>
+                    <span class="rank-last mono hint" :title="r.card && r.card.lastAt || ''">{{ r.card && r.card.lastAt
+                        ? fmtTime(r.card.lastAt) : "—" }}</span>
+                    <span class="rank-score"><template v-if="!r.e"><span class="mono hint">—</span></template><template
+                            v-else-if="cardScore(r.e) != null"><span class="mono"
+                                :title="scoreTitle(r.e)">{{ fmtObj(cardScore(r.e)) }}</span><span
+                                v-if="r.e.ranking_legacy" class="badge feature-badge score-badge"
+                                title="该成绩来自旧一轮评估">旧评估</span></template><template v-else><span class="hint fail"
+                                title="holdout 留出段评估未通过，暂无排名分">🚫 未过</span></template></span>
+                </a>
+            </div>
+            <div class="rank-card-foot hint">成绩为当前排名用分（ranking_score），越小越好 · 点击行打开该赛道完整排行榜 · 悬停查看完整精度</div>
         </div>
     </div>
 </template>
