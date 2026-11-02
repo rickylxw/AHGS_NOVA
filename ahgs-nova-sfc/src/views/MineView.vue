@@ -100,6 +100,36 @@ const trackCards = computed(() =>
     })
 );
 const participatedCount = computed(() => trackCards.value.filter(c => c.participated).length);
+
+/** 赛道级 holdout 结论（ranking/me 条目联表；单条提交本身无 holdout 字段） */
+function holdoutInfo(key) {
+    const r = rankMap.value.get(key);
+    const builtin = store.problems.some(p => p.key === key);
+    if (!r) return builtin ? { label: "holdout：暂无评估", cls: "hint", title: "" } : null;
+    const score = r.ranking_score;
+    if (r.ranking_legacy) {
+        return {
+            label: "holdout：旧评估成绩 " + fmtObj(r.objective_legacy ?? r.best_objective),
+            cls: "badge feature-badge",
+            title: "该赛道成绩沿用旧一轮评估（ranking_legacy），未通过新复核；新训练集成绩：" + fullNum(r.train_objective ?? null),
+        };
+    }
+    if (score != null && isFinite(Number(score))) {
+        return {
+            label: "holdout 已通过 · 排名分 " + fmtObj(score),
+            cls: "badge src-local",
+            title: "当前排名用分（ranking_score）：" + fullNum(score) + (r.train_objective != null ? "；新训练集成绩：" + fullNum(r.train_objective) : ""),
+        };
+    }
+    if (r.train_objective != null) {
+        return {
+            label: "holdout 未通过 · 仅训练分 " + fmtObj(r.train_objective),
+            cls: "badge rk-holdout",
+            title: "holdout 留出段评估未通过（ranking_score 为空），展示与排名以训练分口径参与；新训练集成绩：" + fullNum(r.train_objective),
+        };
+    }
+    return { label: "holdout：暂无评估", cls: "hint", title: "" };
+}
 const TIERS = [
     { key: "1", label: "第 1 名", test: r => r === 1 },
     { key: "2", label: "第 2 名", test: r => r === 2 },
@@ -944,6 +974,8 @@ async function savePassword() {
                             · 最优 <b class="mono" :title="'完整值：' + fullNum(rankMap.get(key).best_objective)">{{ fmtObj(rankMap.get(key).best_objective) }}</b>
                         </span>
                         <span v-else class="hint">暂无名次</span>
+                        <span v-if="holdoutInfo(key)" :class="holdoutInfo(key).cls"
+                            :title="holdoutInfo(key).title">{{ holdoutInfo(key).label }}</span>
                         <span v-if="(subsByProblem[key] || []).length > 1" class="head-spark"
                             title="我的提交适应度走势（时间序）">
                             <span><Sparkline :values="subSpark(key)" /></span></span>
