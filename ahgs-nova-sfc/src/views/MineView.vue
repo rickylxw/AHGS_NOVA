@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
-import { api, getToken, getStoredUser } from "../lib/api";
+import { api, fetchInstances, getToken, getStoredUser } from "../lib/api";
 import { FW_LABEL, STATUS_LABEL } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
 import { navToCurve } from "../lib/router";
@@ -711,6 +711,25 @@ function statusName(s) {
     return STATUS_LABEL[s] ?? s ?? "—";
 }
 
+/** 提交记录状态徽标（官方 2026-11：review_flag 违规撤榜 / archived 归档 / ranking_status 评估状态） */
+function subTag(s) {
+    const flag = (s.review_flag ?? "").trim();
+    if (flag === "violation" || flag === "suspected_injection")
+        return { label: "违规，已撤回", cls: "src-api", title: (s.review_reason ?? "").trim() || "违规记录已从排行榜撤回" };
+    if (s.archived === true)
+        return s.ranking_legacy === true || s.scoring_cohort === "legacy"
+            ? { label: "旧版归档", cls: "feature-badge", title: "旧评估标准下的归档记录" }
+            : { label: "已归档", cls: "feature-badge", title: "该记录已归档或撤回，成绩保留但不参与排名" };
+    const rs = (s.ranking_status ?? "").trim();
+    if (rs === "evaluating" || rs === "pending" || rs === "queued")
+        return { label: "评估中", cls: "src-local", title: "留出集评估正在进行" };
+    if (rs === "failed") return { label: "评估失败", cls: "src-api", title: "留出集评估未产生有效成绩；具体原因未记录" };
+    if (rs === "disabled" || rs === "unavailable")
+        return { label: "未评估", cls: "feature-badge", title: "提交时该情景处于停用状态或缺少留出集数据，未做排名评估" };
+    if (rs === "unverified" || rs === "") return { label: "等待评估", cls: "feature-badge", title: "尚未完成留出集评估" };
+    return null;
+}
+
 /** 名次底色：前三名金/银/铜，其余为主题色 */
 function rankCls(r) {
     return r === 1 ? "rp1" : r === 2 ? "rp2" : r === 3 ? "rp3" : "rpn";
@@ -778,7 +797,7 @@ async function loadRecords() {
 async function loadInstances() {
     instLoading.value = true;
     const [i, r] = await Promise.all([
-        api("/api/instances").then(r => r.instances ?? []).catch(() => []),
+        fetchInstances().catch(() => []),
         api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []),
     ]);
     instances.value = i;
@@ -803,6 +822,38 @@ async function loadInstances() {
         runMyBestMap.value = mb;
     }
     instLoading.value = false;
+}
+
+/* ---------- 实例重命名 / 删除（官方 2026-11 起 PATCH/DELETE /api/instances/{id}） ---------- */
+const instBusy = ref(0); // 正在操作的实例 id
+
+async function renameInstance(inst) {
+    const name = window.prompt("重命名实例", inst.name ?? "");
+    if (!name || !name.trim() || name.trim() === inst.name) return;
+    instBusy.value = inst.id;
+    try {
+        await api(`/api/instances/${inst.id}`, { method: "PATCH", body: { name: name.trim() } });
+        inst.name = name.trim();
+        toast("已重命名", "ok");
+    } catch (e) {
+        toast("重命名失败：" + e.message, "err");
+    } finally {
+        instBusy.value = 0;
+    }
+}
+
+async function deleteInstance(inst) {
+    if (!window.confirm(`确定删除实例「${inst.name ?? inst.id}」？此操作不可恢复。`)) return;
+    instBusy.value = inst.id;
+    try {
+        await api(`/api/instances/${inst.id}`, { method: "DELETE" });
+        instances.value = instances.value.filter(x => x.id !== inst.id);
+        toast("已删除实例", "ok");
+    } catch (e) {
+        toast("删除失败：" + e.message, "err");
+    } finally {
+        instBusy.value = 0;
+    }
 }
 
 /** 进化记录行：与我最优的差距文本（ascend-aware） */
@@ -1031,7 +1082,9 @@ async function savePassword() {
                                     <td><FwBadge :ft="s.framework_type" /></td>
                                     <td><SrcBadge :src="s.model_source" /> <span class="mono hint">{{ s.llm_model || ""
                                         }}</span></td>
-                                    <td class="num mono">{{ fmtObj(s.objective) }}</td>
+                                    <td class="num mono">{{ fmtObj(s.objective) }}<span v-if="subTag(s)" class="badge"
+                                            :class="subTag(s).cls" :title="subTag(s).title" style="margin-left: 6px">{{
+                                            subTag(s).label }}</span></td>
                                     <td class="num mono">{{ fmtTokens(s.total_tokens) }}</td>
                                     <td class="mono hint">{{ fmtTime(s.created_at) }}</td>
                                     <td><button class="btn small" @click.stop="navToCurve(s.id)">曲线</button></td>
@@ -1077,7 +1130,9 @@ async function savePassword() {
                         <tbody>
                             <tr v-for="r in visibleRuns" :key="r.run_id">
                                 <td class="num mono">{{ r.run_id }}</td>
-                                <td class="mono">{{ r.problem_key ?? "—" }}</td>
+                                <td class="mono">{{ r.problem_key ?? "—" }}<span v-if="r.is_violation || r.review_flag"
+                                        class="badge src-api" style="margin-left: 6px"
+                                        :title="r.review_reason || '该任务涉及违规记录'">⚠ 违规</span></td>
                                 <td><span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span></td>
                                 <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
                                 <td class="tier-top1" :title="runTop1Text(r)">{{ runTop1Text(r) || "—" }}</td>
@@ -1117,7 +1172,15 @@ async function savePassword() {
                                 <td class="mono hint">{{ i.config?.llm_model ?? "—" }}</td>
                                 <td class="mono">{{ i.problem_key ?? "—" }}</td>
                                 <td class="mono hint">{{ i.updated_at ? fmtTime(i.updated_at) : "—" }}</td>
-                                <td><a class="btn small" href="#/evo">载入 →</a></td>
+                                <td>
+                                    <span class="chip-row" style="gap: 6px">
+                                        <a class="btn small" href="#/evo">载入 →</a>
+                                        <button class="btn small" :disabled="instBusy === i.id" title="重命名实例"
+                                            @click="renameInstance(i)">{{ instBusy === i.id ? '⏳' : '✏️' }}</button>
+                                        <button class="btn small danger" :disabled="instBusy === i.id" title="删除实例"
+                                            @click="deleteInstance(i)">{{ instBusy === i.id ? '⏳' : '🗑' }}</button>
+                                    </span>
+                                </td>
                             </tr>
                             <tr v-if="instances.length > LIST_PREVIEW" class="fold-row">
                                 <td :colspan="6">

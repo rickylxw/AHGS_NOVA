@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { api } from "../lib/api";
+import { api, fetchRecentSubmissions } from "../lib/api";
 import { store, openSubmissionDrawer, openUserDrawer } from "../lib/store";
 import { FW_LABEL, PALETTE } from "../lib/constants";
 import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime } from "../lib/format";
@@ -24,10 +24,34 @@ function onRowClick(s) {
     else if (s.user_id != null) openUserDrawer(s.user_id);
 }
 
+/** 官方 2026-11 起 /api/submissions/recent 为分页契约（单页 pageSize 上限 100）。
+ *  总览需要较深的历史样本做 24h 活动分布，故跟随翻页取最多 RECENT_PAGES 页。 */
+const RECENT_PAGES = 3;
+const RECENT_PAGE_SIZE = 100;
+
+async function loadRecent() {
+    const out = [];
+    let snapshot = null;
+    let total = null;
+    for (let page = 1; page <= RECENT_PAGES; page++) {
+        const r = await fetchRecentSubmissions({
+            page,
+            pageSize: RECENT_PAGE_SIZE,
+            sort: "time",
+            snapshot,
+        }).catch(() => null);
+        if (!r) break;
+        if (Number.isInteger(r.snapshot)) snapshot = r.snapshot;
+        if (Number.isInteger(r.total)) total = r.total;
+        out.push(...(r.submissions ?? []));
+        const got = out.length;
+        if (!got || (total != null && got >= total) || (r.submissions ?? []).length < RECENT_PAGE_SIZE) break;
+    }
+    return out;
+}
+
 onMounted(async () => {
-    recent.value = await api("/api/submissions/recent?limit=300")
-        .then(r => r.submissions ?? [])
-        .catch(() => []);
+    recent.value = await loadRecent();
     rankings.value = await Promise.all(
         store.problems.map(p =>
             api(`/api/ranking/${p.key}`)
@@ -109,7 +133,7 @@ const fwSegments = computed(() =>
             <div class="stat">
                 <div class="k">近期提交</div>
                 <div class="v">{{ recent.length }}</div>
-                <div class="s">{{ recent.length >= 200 ? "已到平台单次上限（200 条）" : "最近提交流样本" }}</div>
+                <div class="s">{{ recent.length >= 300 ? "已到取样上限（近 300 条）" : "最近提交流样本" }}</div>
             </div>
             <div class="stat">
                 <div class="k">累计 token</div>

@@ -36,6 +36,8 @@ const cfg = reactive({
     llm_base_url: "",
     use_local_llm: true,
     api_key: "",
+    temperature: "",
+    top_p: "",
     problem_override: "",
     fun_name: "",
     fun_args: [],
@@ -314,6 +316,13 @@ function collectBody() {
         train_solution: cfg.train_solution,
     };
     if (!cfg.use_local_llm && cfg.api_key) body.api_key = cfg.api_key;
+    // 官方 2026-11 起新增可选采样参数（本地 LLM 生效；留空用服务端默认 0.9 / 0.95）
+    if (cfg.temperature !== "" && cfg.temperature != null && isFinite(Number(cfg.temperature)))
+        body.temperature = Number(cfg.temperature);
+    if (cfg.top_p !== "" && cfg.top_p != null && isFinite(Number(cfg.top_p))) body.top_p = Number(cfg.top_p);
+    // 官方 2026-11 起支持从已保存实例续跑：选择了实例即携带 source_instance_id
+    const instId = Number(instSel.value);
+    if (instId) body.source_instance_id = instId;
     return body;
 }
 
@@ -527,6 +536,18 @@ function fwName(ft) {
                     <div class="hint">{{ cfg.use_local_llm ? "已选择实验室本地 LLM，无需配置 API Key / Base URL / 模型。" :
                         "将改用你自己的 API：请填写 Base URL（含端口）、模型名与 API Key。" }}</div>
                 </div>
+                <div class="grid cols-2">
+                    <div class="field">
+                        <label>采样温度 temperature（可选，本地 LLM 生效）</label>
+                        <input type="number" step="0.1" min="0" max="2" v-model="cfg.temperature"
+                            placeholder="留空用默认 0.9" />
+                        <div class="hint">提高可缓解「生成趋同 · 重复丢弃」；留空用平台默认 0.9。</div>
+                    </div>
+                    <div class="field">
+                        <label>采样 top_p（可选，本地 LLM 生效）</label>
+                        <input type="number" step="0.05" min="0" max="1" v-model="cfg.top_p" placeholder="留空用默认 0.95" />
+                    </div>
+                </div>
 
                 <div v-if="cfg.framework_type === 'custom'">
                     <div class="mine-head"><span class="mine-title">自定义进化框架</span><span class="hint">上传
@@ -641,7 +662,9 @@ function fwName(ft) {
                     <tbody>
                         <tr v-for="r in visibleRuns" :key="r.run_id">
                             <td class="num mono">{{ r.run_id }}</td>
-                            <td>{{ r.problem_key ?? "—" }}</td>
+                            <td>{{ r.problem_key ?? "—" }}<span v-if="r.is_violation || r.review_flag"
+                                    class="badge src-api" style="margin-left: 6px"
+                                    :title="r.review_reason || '该任务涉及违规记录'">⚠ 违规</span></td>
                             <td><span class="badge" :class="'evo-st-' + r.status" :title="runFailTitle(r)">{{ statusName(r.status) }}</span></td>
                             <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
                             <td><a class="btn small" :href="'#/curve?run=' + r.run_id">监控 →</a></td>

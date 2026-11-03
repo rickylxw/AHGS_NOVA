@@ -80,6 +80,89 @@ async function del(p) {
     }
 }
 
+/* ---------- 编辑自定义问题（官方 2026-11 起 PATCH /api/custom-problems/{key}，
+    可改名称 / 描述 / 函数签名 / 进化方向 / 数据集可见性与版本） ---------- */
+const editOpen = ref(false);
+const editBusy = ref(false);
+const editErr = ref("");
+const editKey = ref("");
+const ed = reactive({
+    name: "",
+    description: "",
+    fun_name: "",
+    funArgsText: "[]",
+    funRetText: "[]",
+    fun_notes: "",
+    ascend: true,
+    dataset_status: "admin_only",
+    dataset_version: "",
+    evaluator_version: "",
+});
+
+function openEdit(p) {
+    editKey.value = p.problem_key ?? p.key;
+    Object.assign(ed, {
+        name: p.name ?? "",
+        description: p.description ?? "",
+        fun_name: p.fun_name ?? "",
+        funArgsText: JSON.stringify(p.fun_args ?? []),
+        funRetText: JSON.stringify(p.fun_return ?? []),
+        fun_notes: p.fun_notes ?? "",
+        ascend: p.ascend !== false,
+        dataset_status: p.dataset_status ?? "admin_only",
+        dataset_version: p.dataset_version ?? "",
+        evaluator_version: p.evaluator_version ?? "",
+    });
+    editErr.value = "";
+    editOpen.value = true;
+}
+
+async function saveEdit() {
+    let fa, fr;
+    try {
+        fa = JSON.parse(ed.funArgsText || "[]");
+    } catch {
+        editErr.value = "fun_args 不是合法 JSON 数组";
+        return;
+    }
+    try {
+        fr = JSON.parse(ed.funRetText || "[]");
+    } catch {
+        editErr.value = "fun_return 不是合法 JSON 数组";
+        return;
+    }
+    if (!ed.name.trim()) {
+        editErr.value = "问题命名不能为空";
+        return;
+    }
+    editBusy.value = true;
+    editErr.value = "";
+    try {
+        await api(`/api/custom-problems/${editKey.value}`, {
+            method: "PATCH",
+            body: {
+                name: ed.name.trim(),
+                description: ed.description,
+                fun_name: ed.fun_name,
+                fun_args: fa,
+                fun_return: fr,
+                fun_notes: ed.fun_notes,
+                ascend: ed.ascend,
+                dataset_status: ed.dataset_status,
+                dataset_version: ed.dataset_version,
+                evaluator_version: ed.evaluator_version,
+            },
+        });
+        editOpen.value = false;
+        toast("已保存修改", "ok");
+        loadList();
+    } catch (e) {
+        editErr.value = e.message;
+    } finally {
+        editBusy.value = false;
+    }
+}
+
 function agApplyPreset() {
     const p = presets.value.find(x => x.id === ag.preset);
     if (p) {
@@ -232,9 +315,20 @@ onUnmounted(() => {
                             <td class="mono">{{ p.problem_key ?? p.key ?? "—" }}</td>
                             <td><span class="badge" :class="p.ascend === false ? 'src-api' : 'src-local'">{{ p.ascend ===
                                 false ? "越大越好" : "越小越好" }}</span></td>
-                            <td>{{ p.category ?? "自定义" }}</td>
+                            <td>{{ p.category ?? "自定义" }}<span v-if="p.dataset_status"
+                                    class="badge" :class="p.dataset_status === 'released' ? 'src-local' : 'feature-badge'"
+                                    style="margin-left: 6px" :title="p.dataset_status === 'released' ? '数据集开放给所有用户' : '数据集仅管理员可见'">{{
+                                    p.dataset_status === "released" ? "已开放" : "仅管理员" }}</span></td>
                             <td class="mono">{{ p.fun_name ?? "—" }}</td>
-                            <td><button v-if="loggedIn" class="btn small danger" :disabled="deleting === (p.problem_key ?? p.key)" @click="del(p)">{{ deleting === (p.problem_key ?? p.key) ? '⏳ 删除中…' : '删除' }}</button></td>
+                            <td>
+                                <span class="chip-row" style="gap: 6px">
+                                    <button v-if="loggedIn" class="btn small" :title="`编辑「${p.name ?? p.problem_key ?? p.key}」`"
+                                        @click="openEdit(p)">✏️ 编辑</button>
+                                    <button v-if="loggedIn" class="btn small danger"
+                                        :disabled="deleting === (p.problem_key ?? p.key)" @click="del(p)">{{ deleting ===
+                                        (p.problem_key ?? p.key) ? '⏳ 删除中…' : '删除' }}</button>
+                                </span>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -346,6 +440,74 @@ onUnmounted(() => {
                         ? (runState.custom_problem.name ?? runState.custom_problem.problem_key ?? "") + "（key: " +
                         runState.custom_problem.problem_key + "）"
                         : "完成" }}</div>
+            </div>
+        </div>
+
+        <!-- 编辑自定义问题 -->
+        <div v-if="editOpen" class="modal-mask" @click.self="editOpen = false">
+            <div class="modal" role="dialog" aria-modal="true" style="max-width: 640px; width: 92vw">
+                <h3>✏️ 编辑问题「{{ ed.name || editKey }}」 <span class="mono hint">{{ editKey }}</span></h3>
+                <div class="grid cols-2">
+                    <div class="field">
+                        <label>问题名称 *</label>
+                        <input v-model="ed.name" />
+                    </div>
+                    <div class="field">
+                        <label>函数名 fun_name</label>
+                        <input v-model="ed.fun_name" />
+                    </div>
+                </div>
+                <div class="field">
+                    <label>问题描述</label>
+                    <textarea class="input" v-model="ed.description" rows="3"></textarea>
+                </div>
+                <div class="grid cols-2">
+                    <div class="field">
+                        <label>fun_args（JSON 数组）</label>
+                        <textarea class="input mono" v-model="ed.funArgsText" rows="2"></textarea>
+                    </div>
+                    <div class="field">
+                        <label>fun_return（JSON 数组）</label>
+                        <textarea class="input mono" v-model="ed.funRetText" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="field">
+                    <label>注意事项 fun_notes</label>
+                    <input v-model="ed.fun_notes" />
+                </div>
+                <div class="grid cols-2">
+                    <div class="field">
+                        <label>进化方向</label>
+                        <select :value="ed.ascend ? 'true' : 'false'"
+                            @change="ed.ascend = $event.target.value === 'true'">
+                            <option value="true">适应度越小越好</option>
+                            <option value="false">适应度越大越好</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>可见性 dataset_status</label>
+                        <select v-model="ed.dataset_status">
+                            <option value="admin_only">仅管理员可见</option>
+                            <option value="released">开放给所有用户</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid cols-2">
+                    <div class="field">
+                        <label>数据集版本 dataset_version</label>
+                        <input class="mono" v-model="ed.dataset_version" placeholder="如 my-dataset-v1" />
+                    </div>
+                    <div class="field">
+                        <label>评估器版本 evaluator_version</label>
+                        <input class="mono" v-model="ed.evaluator_version" placeholder="如 my-evaluator-v1" />
+                    </div>
+                </div>
+                <div class="error-banner" v-if="editErr">{{ editErr }}</div>
+                <div class="chip-row" style="margin-top: 10px">
+                    <button class="btn primary" :disabled="editBusy" @click="saveEdit">{{ editBusy ? '⏳ 保存中…' : '💾 保存修改'
+                        }}</button>
+                    <button class="btn" :disabled="editBusy" @click="editOpen = false">取消</button>
+                </div>
             </div>
         </div>
     </div>

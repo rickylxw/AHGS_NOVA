@@ -22,19 +22,26 @@ export const FW_LABEL = {
 };
 
 /** 官方 2026-10-23 起 Run 新增 queued（排队等待执行资源）状态，语义与 pending 相同，
- *  可经 DELETE /api/evolution/{id}/queue 取消排队 */
+ *  可经 DELETE /api/evolution/{id}/queue 取消排队；
+ *  2026-11 起新增 evaluating（代间留出集评估中）与 stuck（卡死，管理端可见）。 */
 export const STATUS_LABEL = {
     queued: "排队中",
     pending: "排队中",
     running: "运行中",
+    evaluating: "评估中",
     paused: "已暂停",
     completed: "已完成",
     stopped: "已停止",
     failed: "失败",
+    stuck: "卡死",
 };
 
-export const STATUS_ACTIVE = new Set(["queued", "pending", "running", "paused"]);
+export const STATUS_ACTIVE = new Set(["queued", "pending", "running", "evaluating", "paused"]);
 export const STATUS_DONE = new Set(["completed", "failed", "stopped"]);
+
+/** 官方 2026-11 起 paused Run 可携带 maintenance_paused=true：平台更新维护期间的临时暂停，
+ *  服务端恢复后自动续跑，界面提示用户无需手动「继续」。 */
+export const MAINTENANCE_PAUSE_HINT = "平台正在更新维护，本任务已临时暂停。更新完成后我们会为你恢复，无需自行点击「继续」。";
 
 /** 官方 2026-10 起失败的 Run 携带 error_category/error_summary/error_message 等原因字段 */
 export const ERROR_CATEGORY = {

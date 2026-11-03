@@ -1301,6 +1301,20 @@ th.num {
     border-color: rgba(251, 191, 36, .4);
 }
 
+/* evaluating（代间留出集评估中，官方 2026-11 起）：介于运行与排队之间的蓝色 */
+.badge.evo-st-evaluating {
+    color: #7dd3fc;
+    background: rgba(56, 189, 248, .12);
+    border-color: rgba(56, 189, 248, .4);
+}
+
+/* stuck（卡死，官方 2026-11 起）：醒目的橙红警示 */
+.badge.evo-st-stuck {
+    color: #fdba74;
+    background: rgba(251, 146, 60, .14);
+    border-color: rgba(251, 146, 60, .45);
+}
+
 .badge.evo-st-paused {
     color: #c4b5fd;
     background: rgba(167, 139, 250, .13);

@@ -26,6 +26,31 @@ dev server (`npm run dev`) `apiBase()` therefore falls back to same-origin, and 
 (stored value differing from `DEFAULT_API`, e.g. your own full-CORS mock) still wins. Fake the login state
 with the `ahgs_token` / `ahgs_user` localStorage keys.
 
+### API contract notes (platform state as of 2026-11-03, verified against the official React SPA)
+
+- **`GET /api/submissions/recent` is paginated**: params `page` / `pageSize` (camelCase!) / `sort`
+  (`time`|`score`) / `snapshot` plus the `problem_key` / `framework_types` / `model_sources` filters; response
+  `{ submissions, total, page, pageSize, snapshot }`. `snapshot` is a server-side consistency cursor: omit it
+  (and reset `page` to 1) when filters change, echo it back while paging/polling. The legacy `?limit=N` form
+  still works but returns only bare `{ submissions }`. Helper: `fetchRecentSubmissions()` in `lib/api.js`.
+- `GET /api/submissions/archived/recent` — same pagination contract, **admin-only** (401 未登录 / 403
+  需要管理员权限); the official feed shows its toggle only to admins.
+- **Run statuses** now include `evaluating`（评估中）and `stuck`（卡死）; paused runs may carry
+  `maintenance_paused=true`（平台维护临时暂停，服务端会自动恢复）; runs/submissions can carry `is_violation` /
+  `review_flag`（`violation` | `suspected_injection`）/ `review_reason` / `archived` / `ranking_status`.
+  Labels live in `STATUS_LABEL`, tags in the views (`entryTag` / `subTag` / `archTag`).
+- `POST /api/evolution/start` accepts optional `temperature` / `top_p`（本地 LLM 采样，默认 0.9 / 0.95）and
+  `source_instance_id`（从已保存实例续跑）.
+- `PATCH /api/custom-problems/{key}` — edit name/description/fun_*/ascend plus `dataset_status`
+  (`admin_only`|`released`) and dataset/evaluator versions. `PATCH`/`DELETE /api/instances/{id}` — rename /
+  delete an instance.
+- `GET /api/ranking/{key}` responses additionally carry `protocol_label` / `dataset_label` /
+  `evaluation_label` / `scenario_status` / `leaderboard_key`; `/api/problems` entries carry `category`,
+  `is_migration_track`, `protocol_version`.
+- Admin-only surface we deliberately do NOT implement (see the official `/admin-tasks`, `/admin-review`
+  pages): `GET|PATCH /api/admin/problems(/:key)`, `/api/admin/review/*`（违规复核队列）,
+  `GET /api/evolution/admin/runs`, `POST /api/evolution/admin/{run_id}/{action}`.
+
 ## Layout
 
 ```

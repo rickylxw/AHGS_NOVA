@@ -36,6 +36,9 @@ const entries = ref([]);
 const ascend = ref(true);
 const cohort = ref("current"); // current = 主榜（新版评估标准）· legacy = 旧版排行榜
 const legacyAvailable = ref(false);
+/** 排行榜响应自带的展示口径（官方 2026-11 起：protocol_label/dataset_label/evaluation_label/
+ *  scenario_status/leaderboard_key），用于表头徽标 */
+const rankMeta = ref(null);
 const loading = ref(true);
 const err = ref("");
 let timer = null;
@@ -54,6 +57,7 @@ async function load() {
         entries.value = r.entries ?? [];
         ascend.value = r.ascend !== false;
         legacyAvailable.value = r.legacy_available === true;
+        rankMeta.value = r;
     } catch (e) {
         err.value = e.message;
     }
@@ -77,6 +81,23 @@ function isHoldoutPending(e) {
     return (
         !isLegacyEntry(e) && e.ranking_score == null && e.train_objective != null && Number.isFinite(e.train_objective)
     );
+}
+
+/** 已归档且无排名分：成绩不参与排名（官方 2026-11 起榜单条目可携带 archived） */
+function isExcluded(e) {
+    return e.archived === true && !(e.ranking_score != null && Number.isFinite(e.ranking_score));
+}
+
+/** 条目状态标签：违规撤榜 / 已归档 / 旧版归档（官方 2026-11 起 review_flag/archived 字段） */
+function entryTag(e) {
+    const flag = (e.review_flag ?? "").trim();
+    if (flag === "violation" || flag === "suspected_injection")
+        return { label: "违规，已撤回", cls: "src-api", title: (e.review_reason ?? "").trim() || "违规记录已从排行榜撤回" };
+    if (e.archived === true)
+        return e.ranking_legacy === true || e.scoring_cohort === "legacy"
+            ? { label: "旧版归档", cls: "feature-badge", title: "旧评估标准下的归档记录" }
+            : { label: "已归档", cls: "feature-badge", title: "该记录已归档或撤回，成绩保留但不参与排名" };
+    return null;
 }
 
 function displayObjective(e) {
@@ -117,7 +138,10 @@ const meta = computed(
 const problemMeta = computed(() => store.problems.find(p => p.key === problemKey.value) ?? null);
 
 const barRows = computed(() =>
-    visible.value.slice(0, 15).map(e => ({
+    visible.value
+        .filter(e => !isExcluded(e))
+        .slice(0, 15)
+        .map(e => ({
         rank: e.rank,
         label: fullName(e),
         sub:
@@ -211,8 +235,14 @@ onUnmounted(() => {
 <template>
     <div class="card">
         <h2>排行榜
-            <span v-if="problemMeta?.dataset_version" class="badge feature-badge" title="该赛道当前数据集版本">📦 数据集 {{ problemMeta.dataset_version }}</span>
-            <span v-if="problemMeta?.evaluator_version" class="badge src-local" title="该赛道当前评估器版本">🧮 评估器 {{ problemMeta.evaluator_version }}</span>
+            <span v-if="rankMeta?.protocol_label" class="badge feature-badge" title="该赛道当前评分协议（官方 2026-11 起返回）">🏷 {{
+                rankMeta.protocol_label }}</span>
+            <span v-if="rankMeta?.dataset_label" class="badge feature-badge" :title="'数据集口径：' + (rankMeta.dataset_version ?? '')">📦 {{
+                rankMeta.dataset_label }}</span>
+            <span v-if="rankMeta?.evaluation_label" class="badge src-local" :title="'评估口径：' + (rankMeta.evaluator_version ?? '')">🧮 {{
+                rankMeta.evaluation_label }}</span>
+            <span v-if="problemMeta?.dataset_version" class="badge feature-badge" title="该赛道当前数据集版本号">📦 {{ problemMeta.dataset_version }}</span>
+            <span v-if="problemMeta?.evaluator_version" class="badge src-local" title="该赛道当前评估器版本号">🧮 {{ problemMeta.evaluator_version }}</span>
             <span class="tail">{{ meta }}</span>
         </h2>
         <div class="toolbar">
@@ -291,10 +321,13 @@ onUnmounted(() => {
                         <td><FwBadge :ft="e.framework_type" /></td>
                         <td><SrcBadge :src="e.model_source" /></td>
                         <td class="mono hint">{{ e.llm_model || "—" }}</td>
-                        <td class="num mono"><span :class="{ 'legacy-score': isLegacyEntry(e) }"
-                                :title="entryObjTitle(e)">{{ fmtObj(displayObjective(e)) }}</span><span
-                                v-if="isHoldoutPending(e)" class="badge rk-holdout" style="margin-left: 6px">holdout
-                                未过</span></td>
+                        <td class="num mono"><span v-if="isExcluded(e)" class="badge feature-badge"
+                                title="该记录已归档或撤回，成绩保留但不参与排名">不参与排名</span><span v-else
+                                :class="{ 'legacy-score': isLegacyEntry(e) }" :title="entryObjTitle(e)">{{
+                                fmtObj(displayObjective(e)) }}</span><span v-if="!isExcluded(e) && isHoldoutPending(e)"
+                                class="badge rk-holdout" style="margin-left: 6px">holdout
+                                未过</span><span v-if="entryTag(e)" class="badge" :class="entryTag(e).cls"
+                                :title="entryTag(e).title" style="margin-left: 6px">{{ entryTag(e).label }}</span></td>
                         <td class="num mono">{{ fmtTokens(e.total_tokens) }}</td>
                         <td class="mono hint" :title="e.best_submitted_at || ''">{{ fmtTime(e.best_submitted_at) }}</td>
                         <td><button class="btn small" @click.stop="navToCurve(e.submission_id)">曲线</button></td>

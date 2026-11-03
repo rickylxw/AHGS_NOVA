@@ -128,6 +128,30 @@ export async function downloadFile(path, fallbackName = "download.bin") {
     return { blob, filename: m ? decodeURIComponent(m[1]) : fallbackName };
 }
 
+/** 官方 2026-11 起提交流全量分页：{page,pageSize,sort,snapshot} →
+ *  {submissions,total,page,pageSize,snapshot}。snapshot 为服务端一致性快照游标：
+ *  首次加载/切换筛选时不传（服务端下发新快照），翻页与轮询时原样回传，避免翻页跳动。
+ *  archived=true 改用 /api/submissions/archived/recent（已归档/撤回记录，需登录）。
+ *  旧 limit=N 参数已弃用（仍兼容，但只返回裸 submissions，无 total/snapshot）。 */
+export async function fetchRecentSubmissions({
+    page = 1,
+    pageSize = 20,
+    sort = "time",
+    snapshot = null,
+    problemKey = "",
+    frameworkTypes = "",
+    modelSources = "",
+    archived = false,
+} = {}) {
+    const qs = new URLSearchParams({ page: String(page), pageSize: String(pageSize), sort });
+    if (snapshot != null) qs.set("snapshot", String(snapshot));
+    if (problemKey) qs.set("problem_key", problemKey);
+    if (frameworkTypes) qs.set("framework_types", frameworkTypes);
+    if (modelSources) qs.set("model_sources", modelSources);
+    const path = archived ? "/api/submissions/archived/recent" : "/api/submissions/recent";
+    return api(`${path}?${qs}`);
+}
+
 /** 官方 2026-10 起 /api/instances 分页（{instances,total,has_more}）；跟随翻页取全量，
  *  旧结构（直接返回全量 instances）自动兼容。上限 20×50=1000 条，防异常死循环。 */
 export async function fetchInstances() {
