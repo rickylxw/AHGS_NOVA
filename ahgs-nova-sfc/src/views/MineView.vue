@@ -38,6 +38,12 @@ const pwBusy = ref(false);
 const avatarIn = ref(null);
 
 const rankMap = computed(() => new Map(ranks.value.map(e => [e.problem_key, e])));
+const ownRankMap = ref(new Map()); // problem_key -> 我在公开榜单的 entry（/api/ranking/{key} 按 user_id 联出）
+// /api/ranking/me 的条目缺 ranking_score 且名次可能滞后（2026-10-30 实测），
+// holdout 状态/排名一律优先用公开榜单联出的 ownRankMap，me 接口仅作兜底。
+function myRank(key) {
+    return ownRankMap.value.get(key) ?? rankMap.value.get(key) ?? null;
+}
 const subsByProblem = computed(() => {
     const m = {};
     for (const s of mySubs.value) {
@@ -48,7 +54,7 @@ const subsByProblem = computed(() => {
 const problemKeys = computed(() => [...new Set([...rankMap.value.keys(), ...Object.keys(subsByProblem.value)])]);
 const trackCards = computed(() =>
     store.problems.map(p => {
-        const rank = rankMap.value.get(p.key);
+        const rank = myRank(p.key);
         const subs = (subsByProblem.value[p.key] ?? [])
             .slice()
             .sort((a, b) => (parseServerTime(a.created_at)?.getTime() ?? 0) - (parseServerTime(b.created_at)?.getTime() ?? 0));
@@ -103,7 +109,7 @@ const participatedCount = computed(() => trackCards.value.filter(c => c.particip
 
 /** 赛道级 holdout 结论（ranking/me 条目联表；单条提交本身无 holdout 字段） */
 function holdoutInfo(key) {
-    const r = rankMap.value.get(key);
+    const r = myRank(key);
     const builtin = store.problems.some(p => p.key === key);
     if (!r) return builtin ? { label: "holdout：暂无评估", cls: "hint", title: "" } : null;
     const score = r.ranking_score;
@@ -594,7 +600,20 @@ async function openRankCard() {
     nowTick.value = new Date();
     if (!clockTimer) clockTimer = setInterval(() => (nowTick.value = new Date()), 1000);
     try {
-        rankEntries.value = (await api("/api/ranking/me")).entries ?? [];
+                // /api/ranking/me 条目缺 ranking_score 且名次可能滞后：优先用公开榜单联出的 ownRankMap
+        if (!ownRankMap.value.size) {
+            if (!recordsLoading.value) await loadRecords();
+            else await Promise.race([
+                new Promise(resolve => {
+                    const stop = watch(() => recordsLoading.value, l => {
+                        if (!l) { stop(); resolve(); }
+                    }, { immediate: true });
+                }),
+                new Promise(resolve => setTimeout(resolve, 10000)),
+            ]);
+        }
+        const own = [...ownRankMap.value.entries()].map(([problem_key, e]) => ({ problem_key, ...e }));
+        rankEntries.value = own.length ? own : ((await api("/api/ranking/me").catch(() => ({}))).entries ?? []);
     } catch {
         rankEntries.value = [];
     }
@@ -734,16 +753,24 @@ async function loadRecords() {
     ]);
     ranks.value = r1;
     mySubs.value = r2;
-    // 各赛道第一名（用于速览行展示榜首成绩与差距）
+    // 各赛道第一名（用于速览行展示榜首成绩与差距）+ 我在公开榜单的条目（holdout 判定用）
     const rankings = await Promise.all(
         store.problems.map(p => api("/api/ranking/" + p.key).then(r => r.entries ?? []).catch(() => []))
     );
     const m = new Map();
+    const own = new Map();
+    const myId = store.user?.id ?? getStoredUser()?.id ?? null;
     store.problems.forEach((p, i) => {
-        const top = (rankings[i] ?? []).find(e => e.rank === 1);
+        const entries = rankings[i] ?? [];
+        const top = entries.find(e => e.rank === 1);
         if (top) m.set(p.key, top);
+        if (myId != null) {
+            const mine = entries.find(e => e.user_id === myId);
+            if (mine) own.set(p.key, mine);
+        }
     });
     top1Map.value = m;
+    ownRankMap.value = own;
     recordsLoadedOnce.value = true;
     recordsLoading.value = false;
 }
@@ -963,15 +990,15 @@ async function savePassword() {
                 </div>
                 <div v-for="key in problemKeys" :key="key" :id="'sec-' + key" class="track-section">
                     <div class="mine-head">
-                        <span class="mine-title">{{ rankMap.get(key)?.problem_name || probName(key) }}</span>
-                        <span v-if="rankMap.get(key)?.ranking_legacy" class="mine-rank">
+                        <span class="mine-title">{{ myRank(key)?.problem_name || probName(key) }}</span>
+                        <span v-if="myRank(key)?.ranking_legacy" class="mine-rank">
                             <span class="badge feature-badge">旧成绩未通过复核</span>
                         </span>
-                        <span v-else-if="rankMap.get(key)" class="mine-rank">
-                            <span class="rank-pill" :class="rankCls(rankMap.get(key).rank)"><template
-                                    v-if="rankMap.get(key).rank <= 3">{{ ["🥇", "🥈", "🥉"][rankMap.get(key).rank - 1]
-                                    }}</template>第 <b class="mono">{{ rankMap.get(key).rank }}</b> 名</span>
-                            · 最优 <b class="mono" :title="'完整值：' + fullNum(rankMap.get(key).best_objective)">{{ fmtObj(rankMap.get(key).best_objective) }}</b>
+                        <span v-else-if="myRank(key)" class="mine-rank">
+                            <span class="rank-pill" :class="rankCls(myRank(key).rank)"><template
+                                    v-if="myRank(key).rank <= 3">{{ ["🥇", "🥈", "🥉"][myRank(key).rank - 1]
+                                    }}</template>第 <b class="mono">{{ myRank(key).rank }}</b> 名</span>
+                            · 最优 <b class="mono" :title="'完整值：' + fullNum(myRank(key).best_objective)">{{ fmtObj(myRank(key).best_objective) }}</b>
                         </span>
                         <span v-else class="hint">暂无名次</span>
                         <span v-if="holdoutInfo(key)" :class="holdoutInfo(key).cls"
