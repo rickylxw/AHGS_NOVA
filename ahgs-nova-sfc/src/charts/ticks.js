@@ -17,8 +17,16 @@ export function niceTicks(min, max, count = 4) {
     const step = (norm >= 5 ? 10 : norm >= 2 ? 5 : norm >= 1 ? 2 : 1) * mag;
     const lo = Math.floor(min / step) * step;
     const hi = Math.ceil(max / step) * step;
+    // 当 step 小于数值量级的浮点精度（ulp）时，v += step 不再前进（粘滞），
+    // 原实现会无限 push 直至数组长度上限（RangeError: Invalid array length）。
+    // 真实触发场景：收敛的 Run 各代适应度几乎相同，span 只差末位几个 ulp
+    // （如 best=1.9096341560457413 / avg=1.909634156045741，span≈3.6e-16 < ulp(1.9)）。
     const ticks = [];
-    for (let v = lo; v <= hi + step * 0.5; v += step) ticks.push(Number(v.toFixed(10)));
+    const limit = hi + step * 0.5;
+    for (let v = lo; v <= limit; v += step) {
+        ticks.push(Number(v.toFixed(10)));
+        if (!(v + step > v) || ticks.length > 64) break; // v 粘滞不再前进 / 兜底上限，保证终止
+    }
     return { ticks, lo, hi };
 }
 
