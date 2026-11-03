@@ -52,6 +52,11 @@ const rec = ref(null);
 
 // 我在各赛道的名次（用于“与自己最优对比”）
 const myRanks = ref([]);
+// 我在公开榜单中的条目（/api/ranking/{key} 按 user_id 联出）。
+// /api/ranking/me 的条目缺 ranking_score 且名次可能滞后（2026-10-30 实测，同 MineView），
+// 会导致“与自己最优对比”把 holdout 正常的赛道误标为「暂无有效排名分」，
+// 故有效性/名次一律优先用公开榜单联出的条目，me 接口仅作兜底。
+const ownRankMap = ref(new Map()); // problem_key -> 我在公开榜单的 entry
 // 平台实例（含每次进化的完整配置，通过 run_id 关联到 Run）
 const instances = ref([]);
 
@@ -66,6 +71,8 @@ onMounted(async () => {
     if (getToken()) {
         myRanks.value = await api("/api/ranking/me").then(r => r.entries ?? []).catch(() => []);
         instances.value = await fetchInstances().catch(() => []);
+        // 公开榜单联表不阻塞主内容加载：联出后 mineCompare 经响应式自动刷新
+        loadOwnBoardEntries();
     }
     const runP = props.params.get("run");
     const idP = props.params.get("id");
@@ -78,6 +85,21 @@ onMounted(async () => {
         loadSubmission(idP);
     }
 });
+
+/** 从各赛道公开榜单联出我自己的条目（内置赛道才有公开榜，自定义赛道跳过走 me 兜底） */
+async function loadOwnBoardEntries() {
+    const myId = store.user?.id ?? null;
+    if (myId == null) return;
+    const lists = await Promise.all(
+        store.problems.map(p => api("/api/ranking/" + p.key).then(r => r.entries ?? []).catch(() => []))
+    );
+    const own = new Map();
+    store.problems.forEach((p, i) => {
+        const mine = (lists[i] ?? []).find(e => e.user_id === myId);
+        if (mine) own.set(p.key, mine);
+    });
+    ownRankMap.value = own;
+}
 onUnmounted(() => {
     if (pollTimer) clearInterval(pollTimer);
 });
@@ -555,7 +577,8 @@ const compareProblemKey = computed(() => {
     if (source.value?.type === "run") return runProblemKey.value;
     return sub.value.problem_key || inst.value?.problem_key || null;
 });
-const myRankEntry = computed(() => myRanks.value.find(e => e.problem_key === compareProblemKey.value) ?? null);
+const myRankEntry = computed(() => ownRankMap.value.get(compareProblemKey.value) ??
+    myRanks.value.find(e => e.problem_key === compareProblemKey.value) ?? null);
 const curObjective = computed(() => {
     if (source.value?.type === "run") {
         return status.value.best_objective ?? bestHeur.value?.objective ?? null;
