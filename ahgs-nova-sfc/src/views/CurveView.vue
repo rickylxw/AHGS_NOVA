@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api, fetchInstances, fetchRecentSubmissions, getToken } from "../lib/api";
-import { STATUS_ACTIVE, STATUS_LABEL, ERROR_CATEGORY } from "../lib/constants";
+import { MAINTENANCE_PAUSE_HINT, STATUS_ACTIVE, STATUS_LABEL, ERROR_CATEGORY } from "../lib/constants";
 import { store, toast, openHeurDrawer } from "../lib/store";
 import { fmtObj, fmtTokens, fmtTime, fullName, isAscend, fullNum } from "../lib/format";
 import LineChart from "../charts/LineChart.vue";
@@ -730,7 +730,7 @@ function genHint(g, gi) {
                 </div>
                 <div v-if="status.status === 'queued'" class="hint" style="margin-top: 8px">任务正在等待执行资源，可取消排队。</div>
                 <div v-if="status.maintenance_paused" class="error-banner" style="margin-top: 8px">🛠
-                    平台正在更新维护，本任务已临时暂停。更新完成后会自动恢复，无需自行点击「继续」。</div>
+                    {{ MAINTENANCE_PAUSE_HINT }}</div>
                 <div class="error-banner" v-if="ctrlErr" style="margin-top: 8px">{{ ctrlErr }}</div>
                 <div class="error-banner" v-if="status.status === 'failed'" style="margin-top: 8px">
                     <span v-if="failCategory" class="badge src-api" style="margin-right: 6px">{{ failCategory }}</span><b>失败原因：</b>{{ status.error_summary || "进化失败，请展开查看完整错误" }}<span v-if="failAt" class="hint" style="margin-left: 8px">{{ failAt }}</span>

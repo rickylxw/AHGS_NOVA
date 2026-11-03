@@ -43,6 +43,14 @@ export const STATUS_DONE = new Set(["completed", "failed", "stopped"]);
  *  服务端恢复后自动续跑，界面提示用户无需手动「继续」。 */
 export const MAINTENANCE_PAUSE_HINT = "平台正在更新维护，本任务已临时暂停。更新完成后我们会为你恢复，无需自行点击「继续」。";
 
+/** 官方 2026-11 违规撤榜标记的 review_flag 取值（对应官方 Up()），命中即视为违规记录 */
+export const REVIEW_VIOLATION_FLAGS = new Set(["violation", "suspected_injection"]);
+
+/** review_flag 是否为违规撤榜标记（各视图违规标签 / 徽标的统一判定入口） */
+export function isViolationFlag(flag) {
+    return REVIEW_VIOLATION_FLAGS.has((flag ?? "").trim());
+}
+
 /** 官方 2026-10 起失败的 Run 携带 error_category/error_summary/error_message 等原因字段 */
 export const ERROR_CATEGORY = {
     restart: "服务重启中断",

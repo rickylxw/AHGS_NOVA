@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { api, fetchInstances, getToken, getStoredUser } from "../lib/api";
-import { FW_LABEL, STATUS_LABEL } from "../lib/constants";
+import { FW_LABEL, STATUS_LABEL, isViolationFlag } from "../lib/constants";
 import { store, toast, setSession, openSubmissionDrawer } from "../lib/store";
 import { navToCurve } from "../lib/router";
 import { downloadBlob, fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, isAscend, fullNum } from "../lib/format";
@@ -713,8 +713,7 @@ function statusName(s) {
 
 /** 提交记录状态徽标（官方 2026-11：review_flag 违规撤榜 / archived 归档 / ranking_status 评估状态） */
 function subTag(s) {
-    const flag = (s.review_flag ?? "").trim();
-    if (flag === "violation" || flag === "suspected_injection")
+    if (isViolationFlag(s.review_flag))
         return { label: "违规，已撤回", cls: "src-api", title: (s.review_reason ?? "").trim() || "违规记录已从排行榜撤回" };
     if (s.archived === true)
         return s.ranking_legacy === true || s.scoring_cohort === "legacy"
@@ -1130,9 +1129,9 @@ async function savePassword() {
                         <tbody>
                             <tr v-for="r in visibleRuns" :key="r.run_id">
                                 <td class="num mono">{{ r.run_id }}</td>
-                                <td class="mono">{{ r.problem_key ?? "—" }}<span v-if="r.is_violation || r.review_flag"
-                                        class="badge src-api" style="margin-left: 6px"
-                                        :title="r.review_reason || '该任务涉及违规记录'">⚠ 违规</span></td>
+                                <td class="mono">{{ r.problem_key ?? "—" }}<span
+                                        v-if="r.is_violation || isViolationFlag(r.review_flag)" class="badge src-api"
+                                        style="margin-left: 6px" :title="r.review_reason || '该任务涉及违规记录'">⚠ 违规</span></td>
                                 <td><span class="badge" :class="'evo-st-' + r.status">{{ statusName(r.status) }}</span></td>
                                 <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
                                 <td class="tier-top1" :title="runTop1Text(r)">{{ runTop1Text(r) || "—" }}</td>

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { fetchRecentSubmissions } from "../lib/api";
+import { isViolationFlag } from "../lib/constants";
 import { store, openSubmissionDrawer, openUserDrawer } from "../lib/store";
 import { fmtObj, fmtTokens, fmtTime } from "../lib/format";
 import UserCell from "../components/UserCell.vue";
@@ -22,10 +23,11 @@ const SRC_CHIPS = [
 /* 官方 2026-11 起提交流改为全量分页契约：page/pageSize/sort/snapshot → {submissions,total,snapshot}。
  * snapshot 为服务端一致性快照：筛选变化时置 null 重新取快照，翻页与轮询时原样回传。 */
 const PAGE_SIZE = 20;
-const tab = ref("current"); // current = 实时流（4 秒轮询）· archived = 已归档/撤回流（需登录，不轮询）
+const tab = ref("current"); // current = 实时流（4 秒轮询）· archived = 已归档/撤回流（仅管理员，不轮询）
 const page = ref(1);
 const total = ref(0);
 const snapshot = ref(null);
+const loadedTab = ref("current"); // subs 当前内容来自哪个流（失败时判断是否跨流、需清空）
 
 const problem = ref("");
 const sortBy = ref("time"); // time/score 服务端排序；token 为当前页客户端排序
@@ -42,7 +44,13 @@ let timer = null;
 
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)));
 
+/** 请求代际：筛选/问题/流/排序/分页变化时递增，丢弃仍在途的过期响应
+ *  （官方 React 以 effect cleanup 达成同样效果，避免旧响应覆盖新状态的数据） */
+let reqEpoch = 0;
+
 async function load() {
+    const epoch = reqEpoch;
+    const tabAtReq = tab.value;
     try {
         const r = await fetchRecentSubmissions({
             page: page.value,
@@ -52,35 +60,52 @@ async function load() {
             problemKey: problem.value,
             frameworkTypes: [...fw].flatMap(k => FW_CHIPS.find(c => c.key === k).types).join(","),
             modelSources: [...src].join(","),
-            archived: tab.value === "archived",
+            archived: tabAtReq === "archived",
         });
+        if (epoch !== reqEpoch) return; // 过期响应：期间状态已变化，丢弃
         if (Number.isInteger(r.total)) total.value = r.total;
         if (Number.isInteger(r.snapshot)) snapshot.value = r.snapshot;
         const list = r.submissions ?? [];
-        if (tab.value === "current") {
+        if (tabAtReq === "current") {
             const fresh = new Set(list.map(s => s.id).filter(id => !seen.has(id)));
             fresh.forEach(id => freshIds.add(id));
             if (fresh.size) setTimeout(() => fresh.forEach(id => freshIds.delete(id)), 2500);
             list.forEach(s => seen.add(s.id));
         }
         subs.value = list;
+        loadedTab.value = tabAtReq;
         err.value = "";
     } catch (e) {
-        // 失败时清空列表，避免上一流的数据被误戴上当前流的状态标签
-        subs.value = [];
+        if (epoch !== reqEpoch) return;
+        // 仅当失败请求与当前展示的数据跨流时才清空（避免上一流的数据被误戴上当前流的状态标签，
+        // 并顺带重置 total 以免分页器残留旧流的计数）；同流内的瞬时失败保留旧数据，等待轮询自愈
+        if (loadedTab.value !== tabAtReq) {
+            subs.value = [];
+            total.value = 0;
+            snapshot.value = null;
+            loadedTab.value = tabAtReq;
+        }
         err.value = e.message;
     }
 }
 
-/** 筛选/问题/流变化：重置分页并重新取快照（与官方一致） */
+/** 筛选/问题/流变化：重置分页并重新取快照（与官方一致），同时使在途旧响应失效 */
 function refilter() {
     page.value = 1;
     snapshot.value = null;
+    reqEpoch++;
     load();
 }
 
 function setPage(p) {
     page.value = Math.min(Math.max(1, p), pageCount.value);
+    reqEpoch++;
+    load();
+}
+
+/** 排序变化：保留分页与快照（与官方一致），但使在途旧排序的响应失效 */
+function resort() {
+    reqEpoch++;
     load();
 }
 
@@ -114,10 +139,9 @@ function toggleMine() {
 
 /** 已归档/撤回记录的状态标签（官方 2026-11：review_flag 违规撤榜 / archived 归档） */
 function archTag(s) {
-    const flag = (s.review_flag ?? "").trim();
-    if (flag === "violation" || flag === "suspected_injection")
+    if (isViolationFlag(s.review_flag))
         return { label: "违规，已撤回", cls: "src-api", title: (s.review_reason ?? "").trim() || "违规记录已从排行榜撤回" };
-    if ((s.ranking_legacy ?? s.scoring_cohort) === "legacy" || s.scoring_cohort === "legacy")
+    if (s.ranking_legacy === true || s.scoring_cohort === "legacy")
         return { label: "旧版归档", cls: "feature-badge", title: "旧评估标准下的归档记录" };
     return { label: "已归档", cls: "feature-badge", title: "该记录已归档或撤回，成绩保留但不参与排名" };
 }
@@ -195,7 +219,7 @@ onUnmounted(() => clearInterval(timer));
             </div>
             <div class="field" style="min-width: 160px">
                 <label>排序</label>
-                <select v-model="sortBy" @change="load">
+                <select v-model="sortBy" @change="resort">
                     <option value="time">按时间（最新）</option>
                     <option value="score">按得分（服务端）</option>
                     <option value="token">按 token 消耗（当前页）</option>

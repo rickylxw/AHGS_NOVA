@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import { api } from "../lib/api";
 import { store, toast, openSubmissionDrawer, openUserDrawer } from "../lib/store";
 import { navToCurve } from "../lib/router";
-import { FW_LABEL } from "../lib/constants";
+import { FW_LABEL, isViolationFlag } from "../lib/constants";
 import { fmtObj, fmtTokens, fmtTime, fullName, parseServerTime, downloadText } from "../lib/format";
 import HbarList from "../charts/HbarList.vue";
 import UserCell from "../components/UserCell.vue";
@@ -90,8 +90,7 @@ function isExcluded(e) {
 
 /** 条目状态标签：违规撤榜 / 已归档 / 旧版归档（官方 2026-11 起 review_flag/archived 字段） */
 function entryTag(e) {
-    const flag = (e.review_flag ?? "").trim();
-    if (flag === "violation" || flag === "suspected_injection")
+    if (isViolationFlag(e.review_flag))
         return { label: "违规，已撤回", cls: "src-api", title: (e.review_reason ?? "").trim() || "违规记录已从排行榜撤回" };
     if (e.archived === true)
         return e.ranking_legacy === true || e.scoring_cohort === "legacy"

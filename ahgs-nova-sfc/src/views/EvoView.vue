@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
 import { api, downloadFile, fetchInstances, getToken } from "../lib/api";
-import { EVO_DEFAULTS, ERROR_CATEGORY, FW_LABEL, STATUS_LABEL } from "../lib/constants";
+import { EVO_DEFAULTS, ERROR_CATEGORY, FW_LABEL, STATUS_LABEL, isViolationFlag } from "../lib/constants";
 import { store, toast } from "../lib/store";
 import { navHash } from "../lib/router";
 import { fmtObj, parseServerTime } from "../lib/format";
@@ -662,9 +662,9 @@ function fwName(ft) {
                     <tbody>
                         <tr v-for="r in visibleRuns" :key="r.run_id">
                             <td class="num mono">{{ r.run_id }}</td>
-                            <td>{{ r.problem_key ?? "—" }}<span v-if="r.is_violation || r.review_flag"
-                                    class="badge src-api" style="margin-left: 6px"
-                                    :title="r.review_reason || '该任务涉及违规记录'">⚠ 违规</span></td>
+                            <td>{{ r.problem_key ?? "—" }}<span
+                                    v-if="r.is_violation || isViolationFlag(r.review_flag)" class="badge src-api"
+                                    style="margin-left: 6px" :title="r.review_reason || '该任务涉及违规记录'">⚠ 违规</span></td>
                             <td><span class="badge" :class="'evo-st-' + r.status" :title="runFailTitle(r)">{{ statusName(r.status) }}</span></td>
                             <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
                             <td><a class="btn small" :href="'#/curve?run=' + r.run_id">监控 →</a></td>
