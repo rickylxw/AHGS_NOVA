@@ -1067,6 +1067,8 @@ th.num {
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 12px 14px;
+    /* 网格项允许收缩：否则奖台三人行的最小内容宽度会把 cols-2 网格撑出视口（右半边被截） */
+    min-width: 0;
 }
 
 /* 各赛道前三：高亮当前用户 */
@@ -1264,6 +1266,11 @@ th.num {
 @media (max-width: 980px) {
     .evo-grid {
         grid-template-columns: 1fr;
+    }
+
+    /* 奖台三人卡片在此宽度下卡片只有半行宽，横排必然挤压/溢出，提前竖排 */
+    .podium {
+        flex-direction: column;
     }
 }
 
