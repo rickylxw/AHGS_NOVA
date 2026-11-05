@@ -177,22 +177,23 @@ onUnmounted(() => clearInterval(timer));
 
 <template>
     <div class="card">
-        <h2>实时提交流 <span class="tail"><span class="chip-row" style="display: inline-flex; margin-right: 10px">
-                    <button class="chip" :class="{ on: tab === 'current' }" @click="setTab('current')">📡 当前提交</button>
-                    <button class="chip" :class="{ on: tab === 'archived' }"
-                        :disabled="store.user?.role !== 'admin'"
-                        :title="store.user?.role === 'admin' ? '已归档 / 撤回的提交记录' : '查看已归档记录需要管理员权限'"
-                        @click="setTab('archived')">🗄 已归档</button>
-                </span><template v-if="tab === 'current'">每 4 秒自动刷新 · </template>
-                <button class="chip" :class="{ on: !paused }" style="padding: 1px 10px"
-                    :disabled="tab === 'archived'" :title="tab === 'archived' ? '归档流不轮询' : ''"
-                    @click="paused = !paused">{{ paused ? "▶ 继续" : "⏸ 暂停" }}</button>
-                <span v-if="q || mineOnly" class="badge feature-badge" style="margin-left: 6px">筛选后 {{ sorted.length
-                }} 条</span></span></h2>
+        <h2>实时提交流 <span v-if="q || mineOnly" class="badge feature-badge" style="margin-left: 10px">筛选后 {{
+            sorted.length }} 条</span><span class="tail"><span class="chip-row"
+                style="display: inline-flex; margin-right: 10px">
+                <button class="chip" :class="{ on: tab === 'current' }" @click="setTab('current')">📡 当前提交</button>
+                <button class="chip" :class="{ on: tab === 'archived' }" :disabled="store.user?.role !== 'admin'"
+                    :title="store.user?.role === 'admin' ? '已归档 / 撤回的提交记录' : '查看已归档记录需要管理员权限'"
+                    @click="setTab('archived')">🗄 已归档</button>
+                <button class="chip" style="margin-left: 8px" :class="{ on: mineOnly }" :disabled="!store.user"
+                    :title="store.user ? '只看我的提交（与下方用户过滤互斥）' : '登录后可用'" @click="toggleMine">🙋 只看我的</button>
+            </span><template v-if="tab === 'current'">每 4 秒自动刷新 · </template>
+            <button class="chip" :class="{ on: !paused }" style="padding: 1px 10px"
+                :disabled="tab === 'archived'" :title="tab === 'archived' ? '归档流不轮询' : ''"
+                @click="paused = !paused">{{ paused ? "▶ 继续" : "⏸ 暂停" }}</button></span></h2>
         <div class="toolbar">
-            <div class="field" style="min-width: 230px">
+            <div class="field">
                 <label>问题情景</label>
-                <select v-model="problem" @change="refilter">
+                <select v-model="problem" style="width: 240px" @change="refilter">
                     <option value="">全部问题</option>
                     <option v-for="p in store.problems" :key="p.key" :value="p.key">{{ p.name }}</option>
                 </select>
@@ -211,22 +212,18 @@ onUnmounted(() => clearInterval(timer));
                         @click="toggleSet(src, c.key)">{{ c.label }}</button>
                 </div>
             </div>
-            <div class="field" style="min-width: 160px">
+            <div class="field">
                 <label>排序</label>
-                <select v-model="sortBy" @change="resort">
+                <select v-model="sortBy" style="width: 185px" @change="resort">
                     <option value="time">按时间（最新）</option>
                     <option value="score">按得分（服务端）</option>
                     <option value="token">按 token 消耗（当前页）</option>
                 </select>
             </div>
-            <div class="field" style="min-width: 240px">
+            <div class="field" style="flex: 1; min-width: 170px">
                 <label>按用户过滤</label>
-                <div style="display: flex; gap: 6px">
-                    <input v-model="q" style="flex: 1; min-width: 0" :disabled="mineOnly"
-                        :placeholder="mineOnly ? '「只看我的」已开启' : '昵称'" />
-                    <button class="chip" style="white-space: nowrap" :class="{ on: mineOnly }" :disabled="!store.user"
-                        :title="store.user ? '只看我的提交' : '登录后可用'" @click="toggleMine">🙋 只看我的</button>
-                </div>
+                <input v-model="q" style="width: 100%" :disabled="mineOnly"
+                    :placeholder="mineOnly ? '「只看我的」已开启' : '昵称'" />
             </div>
         </div>
         <div v-if="err" class="error-banner">{{ err }}</div>
