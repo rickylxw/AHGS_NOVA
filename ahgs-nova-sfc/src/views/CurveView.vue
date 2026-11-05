@@ -46,6 +46,7 @@ const promptIsCode = ref(false);
 const promptState = ref("");
 const monitorKeyOverride = ref(null);
 let pollTimer = null;
+let runsTimer = null; // 最近 Run 卡片轻量轮询
 
 // submission 模式
 const rec = ref(null);
@@ -60,8 +61,20 @@ const ownRankMap = ref(new Map()); // problem_key -> 我在公开榜单的 entry
 // 平台实例（含每次进化的完整配置，通过 run_id 关联到 Run）
 const instances = ref([]);
 
+/** 拉取我的任务列表（最近 Run 卡片 / Run 下拉 / 任务弹窗共用）。返回是否成功。 */
+async function refreshRuns() {
+    if (!getToken()) return false;
+    try {
+        const r = await api("/api/evolution/my");
+        runs.value = r.runs ?? [];
+        return true;
+    } catch {
+        return false; // 静默失败：卡片保持旧数据，等下次轮询
+    }
+}
+
 onMounted(async () => {
-    runs.value = await api("/api/evolution/my").then(r => r.runs ?? []).catch(() => []);
+    await refreshRuns();
     mySubs.value = getToken()
         ? await api("/api/submissions/my").then(r => r.submissions ?? []).catch(() => [])
         : [];
@@ -74,6 +87,11 @@ onMounted(async () => {
         // 公开榜单联表不阻塞主内容加载：联出后 mineCompare 经响应式自动刷新
         loadOwnBoardEntries();
     }
+    // 最近 Run 卡片实时性：任务状态在服务器后台自行推进（排队→运行→评估→完成），
+    // 仅挂载时拉一次会一直停在旧状态；轻量轮询（10s），页面不可见时跳过
+    runsTimer = setInterval(() => {
+        if (!document.hidden && getToken()) refreshRuns();
+    }, 10000);
     const runP = props.params.get("run");
     const idP = props.params.get("id");
     if (runP) {
@@ -102,6 +120,7 @@ async function loadOwnBoardEntries() {
 }
 onUnmounted(() => {
     if (pollTimer) clearInterval(pollTimer);
+    if (runsTimer) clearInterval(runsTimer);
 });
 
 function pickRun() {
@@ -154,14 +173,9 @@ async function openTasks() {
 async function refreshTasks() {
     tasksLoading.value = true;
     tasksErr.value = "";
-    try {
-        const r = await api("/api/evolution/my");
-        runs.value = r.runs ?? [];
-    } catch (e) {
-        tasksErr.value = e.message;
-    } finally {
-        tasksLoading.value = false;
-    }
+    const ok = await refreshRuns();
+    if (!ok) tasksErr.value = "任务加载失败，请重试。";
+    tasksLoading.value = false;
 }
 
 /** 取消排队（DELETE /api/evolution/{id}/queue，仅 queued 可用） */
@@ -248,6 +262,7 @@ async function loadRun() {
                 if (!STATUS_ACTIVE.has(st.status) && pollTimer) {
                     clearInterval(pollTimer);
                     pollTimer = null;
+                    refreshRuns(); // 该 Run 到达终态：立刻刷新最近 Run 卡片的状态徽标
                 }
             } catch { /* ignore */ }
         }, 3000);
@@ -369,6 +384,7 @@ async function ctrl(action) {
             status.value = await api(`/api/evolution/${source.value.id}/status`);
         } catch { /* ignore */ }
         loadRunResults();
+        refreshRuns(); // 暂停/继续/停止/提交改变任务状态：最近 Run 卡片即时同步
     } catch (e) {
         ctrlErr.value = (action === "submit" ? "提交失败：" : "操作失败：") + e.message;
         toast(ctrlErr.value, "err");
@@ -390,6 +406,7 @@ async function cancelQueue() {
         try {
             status.value = await api(`/api/evolution/${source.value.id}/status`);
         } catch { /* ignore */ }
+        refreshRuns(); // 取消排队后卡片状态即时同步
     } catch (e) {
         ctrlErr.value = "操作失败：" + e.message;
         toast(ctrlErr.value, "err");
