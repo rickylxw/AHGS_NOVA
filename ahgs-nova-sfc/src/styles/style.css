@@ -578,6 +578,43 @@ th.num {
     animation: freshpulse 2.4s ease-out;
 }
 
+/* 提交流分页条（官方 rank-pagination 同布局：左计数、右翻页钮组，含跳页输入） */
+.feed-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+
+.feed-pagination .chip {
+    padding: 3px 11px;
+}
+
+.page-jump {
+    width: 46px;
+    text-align: center;
+    background: var(--bg-soft);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 2px 4px;
+    margin: 0 4px;
+    outline: none;
+    font: inherit;
+}
+
+.page-jump:focus {
+    border-color: var(--accent);
+}
+
+.page-jump::-webkit-outer-spin-button,
+.page-jump::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 @keyframes freshpulse {
     0% {
         background: var(--fresh);

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { fetchRecentSubmissions } from "../lib/api";
 import { isViolationFlag } from "../lib/constants";
 import { store, openSubmissionDrawer, openUserDrawer } from "../lib/store";
@@ -103,6 +103,16 @@ function setPage(p) {
     load();
 }
 
+/* 跳页输入框（官方 rank-pagination 同款）：失焦 / 回车提交，越界自动收敛 */
+const jumpInput = ref("1");
+watch(page, p => { jumpInput.value = String(p); });
+
+function commitJump() {
+    const n = Number.parseInt(jumpInput.value, 10);
+    if (Number.isFinite(n)) setPage(n);
+    else jumpInput.value = String(page.value);
+}
+
 /** 排序变化：保留分页与快照（与官方一致），但使在途旧排序的响应失效 */
 function resort() {
     reqEpoch++;
@@ -167,24 +177,19 @@ onUnmounted(() => clearInterval(timer));
 
 <template>
     <div class="card">
-        <h2>实时提交流 <span class="tail">全赛道 · 全用户 ·
-                <template v-if="tab === 'current'">每 4 秒自动刷新 · </template>
+        <h2>实时提交流 <span class="tail"><span class="chip-row" style="display: inline-flex; margin-right: 10px">
+                    <button class="chip" :class="{ on: tab === 'current' }" @click="setTab('current')">📡 当前提交</button>
+                    <button class="chip" :class="{ on: tab === 'archived' }"
+                        :disabled="store.user?.role !== 'admin'"
+                        :title="store.user?.role === 'admin' ? '已归档 / 撤回的提交记录' : '查看已归档记录需要管理员权限'"
+                        @click="setTab('archived')">🗄 已归档</button>
+                </span><template v-if="tab === 'current'">每 4 秒自动刷新 · </template>
                 <button class="chip" :class="{ on: !paused }" style="padding: 1px 10px"
                     :disabled="tab === 'archived'" :title="tab === 'archived' ? '归档流不轮询' : ''"
                     @click="paused = !paused">{{ paused ? "▶ 继续" : "⏸ 暂停" }}</button>
                 <span v-if="q || mineOnly" class="badge feature-badge" style="margin-left: 6px">筛选后 {{ sorted.length
                 }} 条</span></span></h2>
         <div class="toolbar">
-            <div class="field" style="min-width: 170px">
-                <label>提交流</label>
-                <div class="chip-row">
-                    <button class="chip" :class="{ on: tab === 'current' }" @click="setTab('current')">📡 当前提交</button>
-                    <button class="chip" :class="{ on: tab === 'archived' }"
-                        :disabled="store.user?.role !== 'admin'"
-                        :title="store.user?.role === 'admin' ? '已归档 / 撤回的提交记录' : '查看已归档记录需要管理员权限'"
-                        @click="setTab('archived')">🗄 已归档</button>
-                </div>
-            </div>
             <div class="field" style="min-width: 230px">
                 <label>问题情景</label>
                 <select v-model="problem" @change="refilter">
@@ -206,17 +211,6 @@ onUnmounted(() => clearInterval(timer));
                         @click="toggleSet(src, c.key)">{{ c.label }}</button>
                 </div>
             </div>
-            <div class="field" style="min-width: 150px">
-                <label>按用户过滤</label>
-                <input v-model="q" :disabled="mineOnly" :placeholder="mineOnly ? '「只看我的」已开启' : '昵称'" />
-            </div>
-            <div class="field">
-                <label>&nbsp;</label>
-                <div class="chip-row">
-                    <button class="chip" :class="{ on: mineOnly }" :disabled="!store.user"
-                        :title="store.user ? '只看我的提交' : '登录后可用'" @click="toggleMine">🙋 只看我的</button>
-                </div>
-            </div>
             <div class="field" style="min-width: 160px">
                 <label>排序</label>
                 <select v-model="sortBy" @change="resort">
@@ -225,13 +219,17 @@ onUnmounted(() => clearInterval(timer));
                     <option value="token">按 token 消耗（当前页）</option>
                 </select>
             </div>
+            <div class="field" style="min-width: 240px">
+                <label>按用户过滤</label>
+                <div style="display: flex; gap: 6px">
+                    <input v-model="q" style="flex: 1; min-width: 0" :disabled="mineOnly"
+                        :placeholder="mineOnly ? '「只看我的」已开启' : '昵称'" />
+                    <button class="chip" style="white-space: nowrap" :class="{ on: mineOnly }" :disabled="!store.user"
+                        :title="store.user ? '只看我的提交' : '登录后可用'" @click="toggleMine">🙋 只看我的</button>
+                </div>
+            </div>
         </div>
         <div v-if="err" class="error-banner">{{ err }}</div>
-        <div v-if="total" class="chip-row" style="margin: 8px 0">
-            <button class="chip" :disabled="page <= 1" @click="setPage(page - 1)">← 上一页</button>
-            <span class="hint">第 <b class="mono">{{ page }}</b> / {{ pageCount }} 页 · 共 {{ total }} 条</span>
-            <button class="chip" :disabled="page >= pageCount" @click="setPage(page + 1)">下一页 →</button>
-        </div>
         <EmptyState v-if="!subs.length" icon="🛰️"
             :desc="tab === 'archived' ? '暂无已归档的提交记录' : '暂无提交记录，去「进化」跑一局吧'" />
         <EmptyState v-else-if="!sorted.length" icon="🔍" desc="没有匹配当前筛选的提交" />
@@ -266,6 +264,18 @@ onUnmounted(() => clearInterval(timer));
                     </tr>
                 </tbody>
             </table>
+        </div>
+        <div v-if="total" class="feed-pagination">
+            <span class="hint">共 {{ total }} 条 · 每页 {{ PAGE_SIZE }} 条<template v-if="q || mineOnly"> · 筛选后当前页 {{
+                sorted.length }} 条</template></span>
+            <span class="chip-row" style="align-items: center">
+                <button class="chip" :disabled="page <= 1" title="最前" @click="setPage(1)">«</button>
+                <button class="chip" :disabled="page <= 1" title="上一页" @click="setPage(page - 1)">‹ 上一页</button>
+                <span class="hint">第 <input class="page-jump" type="number" min="1" :max="pageCount"
+                        v-model="jumpInput" @change="commitJump" @keydown.enter="commitJump"> / {{ pageCount }} 页</span>
+                <button class="chip" :disabled="page >= pageCount" title="下一页" @click="setPage(page + 1)">下一页 ›</button>
+                <button class="chip" :disabled="page >= pageCount" title="最后" @click="setPage(pageCount)">»</button>
+            </span>
         </div>
     </div>
 </template>
