@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { api, fetchInstances, fetchRecentSubmissions, getToken } from "../lib/api";
-import { MAINTENANCE_PAUSE_HINT, STATUS_ACTIVE, STATUS_LABEL, ERROR_CATEGORY } from "../lib/constants";
+import { MAINTENANCE_PAUSE_HINT, STATUS_ACTIVE, STATUS_LABEL, ERROR_CATEGORY, isViolationFlag } from "../lib/constants";
 import { store, toast, openHeurDrawer } from "../lib/store";
 import { fmtObj, fmtTokens, fmtTime, fullName, isAscend, fullNum } from "../lib/format";
 import LineChart from "../charts/LineChart.vue";
@@ -120,6 +120,69 @@ function openRun(r) {
 
 function isCurrentRun(id) {
     return isRunMode.value && source.value?.id === id;
+}
+
+/* ---------- 我的任务弹窗（对齐官方 /my-tasks：后台任务状态一览 + 取消排队） ---------- */
+const tasksOpen = ref(false);
+const tasksTab = ref("active"); // active | completed | failed | violation
+const tasksLoading = ref(false);
+const tasksErr = ref("");
+const cancelBusy = ref(0); // 正在取消排队的 run_id
+
+/** 与官方一致的四组：进行中（queued/pending/running/paused/evaluating）、
+ *  已完成、失败/停止（其余终态）、违规（review_flag 命中） */
+const taskGroups = computed(() => {
+    const active = [], completed = [], failed = [], violation = [];
+    for (const r of runs.value) {
+        if (STATUS_ACTIVE.has(r.status)) { active.push(r); continue; }
+        if (isViolationFlag(r.review_flag)) { violation.push(r); continue; }
+        if (r.status === "completed") completed.push(r);
+        else failed.push(r);
+    }
+    const byNewest = a => a.slice().sort((x, y) => (Number(y.run_id) || 0) - (Number(x.run_id) || 0));
+    return { active: byNewest(active), completed: byNewest(completed), failed: byNewest(failed), violation: byNewest(violation) };
+});
+const taskRows = computed(() => taskGroups.value[tasksTab.value] ?? []);
+const activeTaskCount = computed(() => taskGroups.value.active.length);
+
+/** 打开任务弹窗并刷新任务列表 */
+async function openTasks() {
+    tasksOpen.value = true;
+    await refreshTasks();
+}
+
+async function refreshTasks() {
+    tasksLoading.value = true;
+    tasksErr.value = "";
+    try {
+        const r = await api("/api/evolution/my");
+        runs.value = r.runs ?? [];
+    } catch (e) {
+        tasksErr.value = e.message;
+    } finally {
+        tasksLoading.value = false;
+    }
+}
+
+/** 取消排队（DELETE /api/evolution/{id}/queue，仅 queued 可用） */
+async function cancelTaskQueue(runId) {
+    if (cancelBusy.value) return;
+    cancelBusy.value = runId;
+    try {
+        await api(`/api/evolution/${runId}/queue`, { method: "DELETE" });
+        toast(`任务 #${runId} 已取消排队`, "ok");
+        await refreshTasks();
+    } catch (e) {
+        toast("取消排队失败：" + e.message, "err");
+    } finally {
+        cancelBusy.value = 0;
+    }
+}
+
+/** 从任务列表打开该 Run 的实时监控 */
+function openTaskRun(r) {
+    tasksOpen.value = false;
+    openRun(r);
 }
 
 function pickMine() {
@@ -674,7 +737,10 @@ function genHint(g, gi) {
 <template>
     <div>
         <div class="card">
-            <h2>进化分析 <span class="tail">Run = 一次进化（实时监控）；提交 = 一次最优上报（含种群明细）</span></h2>
+            <h2>进化分析 <span class="tail">Run = 一次进化（实时监控）；提交 = 一次最优上报（含种群明细）
+                    <button v-if="getToken()" class="btn small" style="margin-left: 8px"
+                        title="我的进化任务状态一览（官方「我的任务」同款）" @click="openTasks">📋
+                        我的任务<template v-if="activeTaskCount">（{{ activeTaskCount }} 进行中）</template></button></span></h2>
             <div class="picker-row">
                 <select class="input" v-model="runSel" style="max-width: 300px" @change="pickRun">
                     <option value="">— 我的 Run（实时监控）—</option>
@@ -1079,5 +1145,67 @@ function genHint(g, gi) {
                 </div>
             </template>
         </template>
+
+        <!-- 我的任务弹窗（对齐官方 /my-tasks） -->
+        <div v-if="tasksOpen" class="modal-mask" @click.self="tasksOpen = false">
+            <div class="modal" role="dialog" aria-modal="true" style="max-width: 800px; width: 94vw">
+                <h3 style="display: flex; align-items: center; justify-content: space-between">📋 我的任务
+                    <button class="btn small" @click="tasksOpen = false">✕ 关闭</button></h3>
+                <div class="hint" style="margin-bottom: 10px">进化任务在服务器后台运行，关闭页面后仍会继续，登录同一账号即可随时找回。</div>
+                <div class="chip-row" style="margin-bottom: 10px">
+                    <button class="chip" :class="{ on: tasksTab === 'active' }" @click="tasksTab = 'active'">进行中（{{
+                        taskGroups.active.length }}）</button>
+                    <button class="chip" :class="{ on: tasksTab === 'completed' }" @click="tasksTab = 'completed'">已完成（{{
+                        taskGroups.completed.length }}）</button>
+                    <button class="chip" :class="{ on: tasksTab === 'failed' }" @click="tasksTab = 'failed'">失败 / 停止（{{
+                        taskGroups.failed.length }}）</button>
+                    <button class="chip" :class="{ on: tasksTab === 'violation' }" @click="tasksTab = 'violation'">违规（{{
+                        taskGroups.violation.length }}）</button>
+                    <button class="chip" style="margin-left: auto" :disabled="tasksLoading" @click="refreshTasks">{{
+                        tasksLoading ? "⏳ 刷新中…" : "⟳ 刷新" }}</button>
+                </div>
+                <div v-if="tasksErr" class="error-banner">{{ tasksErr }}</div>
+                <div v-if="tasksLoading && !runs.length" class="loading-row"><span class="spinner"></span>加载中…</div>
+                <EmptyState v-else-if="!taskRows.length" icon="🗒️" :desc="tasksTab === 'violation' ? '暂无违规记录' : '暂无任务'" />
+                <div v-else class="table-wrap" style="max-height: 56vh; overflow: auto">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>问题</th>
+                                <th>状态</th>
+                                <th class="num">进度</th>
+                                <th class="num">最优目标</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="r in taskRows" :key="r.run_id" class="clickable-row" title="点击打开实时监控"
+                                @click="openTaskRun(r)">
+                                <td>{{ r.problem_name || r.problem_key || "—" }}<span v-if="isViolationFlag(r.review_flag)"
+                                        class="badge src-api" style="margin-left: 6px"
+                                        :title="r.review_reason || '该任务涉及违规记录'">⚠ 违规</span></td>
+                                <td><span class="badge" :class="'evo-st-' + r.status" :title="runFailTitle(r)">{{
+                                    statusName(r.status) }}</span><span v-if="r.maintenance_paused"
+                                        class="badge feature-badge" style="margin-left: 6px"
+                                        :title="MAINTENANCE_PAUSE_HINT">🛠 维护暂停</span></td>
+                                <td class="num mono">{{ r.current_generation != null && r.total_generations ?
+                                    r.current_generation + " / " + r.total_generations : "—" }}</td>
+                                <td class="num mono">{{ fmtObj(r.best_objective) }}</td>
+                                <td class="mono hint">{{ r.created_at ? fmtTime(r.created_at) : "—" }}</td>
+                                <td>
+                                    <span class="chip-row" style="gap: 6px">
+                                        <button v-if="r.status === 'queued'" class="btn small danger"
+                                            :disabled="cancelBusy === r.run_id" @click.stop="cancelTaskQueue(r.run_id)">{{
+                                            cancelBusy === r.run_id ? "⏳ 取消中…" : "✖ 取消排队" }}</button>
+                                        <button class="btn small" @click.stop="openTaskRun(r)">监控 →</button>
+                                    </span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
